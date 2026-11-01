@@ -108,5 +108,46 @@ static func run_tests(parent_node: Node) -> bool:
 		return false
 	print("  ✅ PASS Shop modal opens successfully")
 	
+	# 7. Test In-Match Joker / Relic Display & Inspection Modal
+	if main.relics_box.get_child_count() != 1:
+		print("❌ FAIL relics_box should show 1 placeholder when 0 relics owned: count=%d" % main.relics_box.get_child_count())
+		main.queue_free()
+		return false
+	print("  ✅ PASS Relics Box displays placeholder when 0 relics owned")
+	
+	# Add a relic and update UI
+	main.game_manager.owned_relics.append("relic_frost_shield")
+	main._update_relics_ui()
+	if main.relics_box.get_child_count() != 1:
+		print("❌ FAIL relics_box should show 1 relic card")
+		main.queue_free()
+		return false
+	var relic_card = main.relics_box.get_child(0)
+	if not (relic_card is PanelContainer) or not relic_card.tooltip_text.contains("Glacial Aegis"):
+		print("❌ FAIL relic card not a PanelContainer or tooltip missing Glacial Aegis")
+		main.queue_free()
+		return false
+	print("  ✅ PASS Owned Relic displayed as interactive mini-card with rich tooltip")
+	
+	# Test Click inspection opens RelicDetailModal
+	main.show_relic_inspection("relic_frost_shield")
+	if not main.relic_detail_modal.visible:
+		print("❌ FAIL relic_detail_modal not visible after inspection request")
+		main.queue_free()
+		return false
+	if not main.relic_modal_title.text.contains("GLACIAL AEGIS"):
+		print("❌ FAIL relic_modal_title mismatch: %s" % main.relic_modal_title.text)
+		main.queue_free()
+		return false
+	print("  ✅ PASS RelicDetailModal opens with correct Joker title, description, and strategy tip")
+	
+	# Close inspection modal
+	main.relic_modal_close_top.emit_signal("pressed")
+	if main.relic_detail_modal.visible:
+		print("❌ FAIL relic_detail_modal still visible after close button pressed")
+		main.queue_free()
+		return false
+	print("  ✅ PASS RelicDetailModal closes cleanly upon user action")
+	
 	main.queue_free()
 	return true

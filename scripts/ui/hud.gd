@@ -36,6 +36,15 @@ const FontLilita = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 @onready var game_over_modal: PanelContainer = $GameOverModal
 @onready var shop_modal: Control = $ShopOverlay
 
+# Relic / Joker Inspection References
+@onready var relic_detail_modal: PanelContainer = $RelicDetailModal
+@onready var relic_modal_rarity: Label = $RelicDetailModal/Margin/VBox/HeaderHBox/RarityLabel
+@onready var relic_modal_title: Label = $RelicDetailModal/Margin/VBox/TitleLabel
+@onready var relic_modal_desc: Label = $RelicDetailModal/Margin/VBox/DescLabel
+@onready var relic_modal_tip: Label = $RelicDetailModal/Margin/VBox/StrategyBox/StrategyMargin/TipLabel
+@onready var relic_modal_close_top: Button = $RelicDetailModal/Margin/VBox/HeaderHBox/CloseTopBtn
+@onready var relic_modal_close_bottom: Button = $RelicDetailModal/Margin/VBox/CloseBottomBtn
+
 # Preloaded Sounds
 var sound_click: AudioStream = preload("res://assets/audio/click1.wav")
 var sound_rollover: AudioStream = preload("res://assets/audio/rollover1.wav")
@@ -70,7 +79,32 @@ func _ready() -> void:
 	game_over_modal.visible = false
 	damage_popup_label.visible = false
 	
+	# Khởi tạo Relic Inspection Modal
+	if relic_detail_modal:
+		relic_detail_modal.visible = false
+		if relic_modal_close_top:
+			relic_modal_close_top.pressed.connect(func(): relic_detail_modal.visible = false)
+		if relic_modal_close_bottom:
+			relic_modal_close_bottom.pressed.connect(func(): relic_detail_modal.visible = false)
+		var strat_box = $RelicDetailModal/Margin/VBox/StrategyBox
+		if strat_box:
+			var sb_strat := StyleBoxFlat.new()
+			sb_strat.bg_color = Color("#0b0d14")
+			sb_strat.border_color = Color("#23293d")
+			sb_strat.set_border_width_all(1)
+			sb_strat.corner_radius_top_left = 6
+			sb_strat.corner_radius_top_right = 6
+			sb_strat.corner_radius_bottom_left = 6
+			sb_strat.corner_radius_bottom_right = 6
+			strat_box.add_theme_stylebox_override("panel", sb_strat)
+	
 	start_new_round(1)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if relic_detail_modal and relic_detail_modal.visible and event is InputEventKey:
+		if event.pressed and event.keycode == KEY_ESCAPE:
+			relic_detail_modal.visible = false
+			get_viewport().set_input_as_handled()
 
 func play_sfx(stream: AudioStream) -> void:
 	if sfx_player and stream:
@@ -114,15 +148,170 @@ func _update_stats_ui() -> void:
 
 func _update_relics_ui() -> void:
 	for child in relics_box.get_children():
+		relics_box.remove_child(child)
 		child.queue_free()
+		
+	if game_manager.owned_relics.is_empty():
+		var placeholder := PanelContainer.new()
+		placeholder.custom_minimum_size = Vector2(140, 68)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.08, 0.12, 0.6)
+		sb.border_color = Color(0.22, 0.25, 0.35, 0.8)
+		sb.set_border_width_all(1)
+		sb.corner_radius_top_left = 8
+		sb.corner_radius_top_right = 8
+		sb.corner_radius_bottom_left = 8
+		sb.corner_radius_bottom_right = 8
+		placeholder.add_theme_stylebox_override("panel", sb)
+		
+		var vbox := VBoxContainer.new()
+		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_theme_constant_override("separation", 2)
+		placeholder.add_child(vbox)
+		
+		var icon_lbl := Label.new()
+		icon_lbl.text = "🃏 JOKERS (0/5)"
+		icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_lbl.add_theme_font_size_override("font_size", 11)
+		icon_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65))
+		vbox.add_child(icon_lbl)
+		
+		var sub_lbl := Label.new()
+		sub_lbl.text = "Visit Shop to Buy"
+		sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sub_lbl.add_theme_font_size_override("font_size", 10)
+		sub_lbl.add_theme_color_override("font_color", Color(0.38, 0.42, 0.52))
+		vbox.add_child(sub_lbl)
+		
+		relics_box.add_child(placeholder)
+		return
+		
 	for relic_id in game_manager.owned_relics:
-		if Relics.RELIC_DEFINITIONS.has(relic_id):
-			var r_info: Dictionary = Relics.RELIC_DEFINITIONS[relic_id]
-			var badge := Label.new()
-			badge.text = "[ %s ]" % r_info.name
-			badge.tooltip_text = r_info.desc
-			badge.add_theme_color_override("font_color", Color("#ffd24d"))
-			relics_box.add_child(badge)
+		if not Relics.RELIC_DEFINITIONS.has(relic_id):
+			continue
+		var r_info: Dictionary = Relics.RELIC_DEFINITIONS[relic_id]
+		var card := _create_relic_in_match_card(relic_id, r_info)
+		relics_box.add_child(card)
+
+func _create_relic_in_match_card(relic_id: String, r_info: Dictionary) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(150, 68)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	
+	var r_icon: String = r_info.get("icon", "🃏")
+	var r_short: String = r_info.get("short_desc", r_info.desc)
+	var r_rarity: String = r_info.get("rarity", "common")
+	
+	# Normal stylebox
+	var sb_normal := StyleBoxFlat.new()
+	sb_normal.bg_color = Color("#131622")
+	sb_normal.border_color = Color("#e5b83b") if r_rarity == "rare" else (Color("#60a5fa") if r_rarity == "uncommon" else Color("#d4af37"))
+	sb_normal.set_border_width_all(2)
+	sb_normal.corner_radius_top_left = 8
+	sb_normal.corner_radius_top_right = 8
+	sb_normal.corner_radius_bottom_left = 8
+	sb_normal.corner_radius_bottom_right = 8
+	
+	# Hover stylebox (brighter border and background)
+	var sb_hover := StyleBoxFlat.new()
+	sb_hover.bg_color = Color("#1c2033")
+	sb_hover.border_color = Color("#fff080")
+	sb_hover.set_border_width_all(3)
+	sb_hover.corner_radius_top_left = 8
+	sb_hover.corner_radius_top_right = 8
+	sb_hover.corner_radius_bottom_left = 8
+	sb_hover.corner_radius_bottom_right = 8
+	
+	card.add_theme_stylebox_override("panel", sb_normal)
+	
+	# Rich tooltip text for mouse hover
+	card.tooltip_text = "[ %s ]\nType: Passive Relic (Joker)\nRarity: %s\n\nEffect: %s\n\n👉 Click to inspect full strategy & synergy" % [
+		r_info.name,
+		r_rarity.capitalize(),
+		r_info.desc
+	]
+	
+	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.add_theme_constant_override("margin_left", 6)
+	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	card.add_child(margin)
+	
+	var vbox := VBoxContainer.new()
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	vbox.add_theme_constant_override("separation", 2)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(vbox)
+	
+	# Header: Icon + Name
+	var header := Label.new()
+	header.mouse_filter = Control.MOUSE_FILTER_PASS
+	header.text = "%s %s" % [r_icon, r_info.name]
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_override("font", FontLilita)
+	header.add_theme_font_size_override("font_size", 12)
+	header.add_theme_color_override("font_color", Color("#ffd24d"))
+	vbox.add_child(header)
+	
+	# Effect text (Always readable in-game by default!)
+	var effect_lbl := Label.new()
+	effect_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+	effect_lbl.text = r_short
+	effect_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	effect_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	effect_lbl.add_theme_font_size_override("font_size", 10)
+	effect_lbl.add_theme_color_override("font_color", Color("#c0caf5"))
+	vbox.add_child(effect_lbl)
+	
+	# Inspect hint
+	var hint_lbl := Label.new()
+	hint_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+	hint_lbl.text = "🔍 Click to inspect"
+	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint_lbl.add_theme_font_size_override("font_size", 9)
+	hint_lbl.add_theme_color_override("font_color", Color(0.55, 0.6, 0.7))
+	vbox.add_child(hint_lbl)
+	
+	# Hover handlers
+	card.mouse_entered.connect(func():
+		card.add_theme_stylebox_override("panel", sb_hover)
+		play_sfx(sound_rollover)
+	)
+	card.mouse_exited.connect(func():
+		card.add_theme_stylebox_override("panel", sb_normal)
+	)
+	
+	# Click handler
+	card.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			show_relic_inspection(relic_id)
+	)
+	
+	return card
+
+func show_relic_inspection(relic_id: String) -> void:
+	if not Relics.RELIC_DEFINITIONS.has(relic_id):
+		return
+	var r_info: Dictionary = Relics.RELIC_DEFINITIONS[relic_id]
+	var r_icon: String = r_info.get("icon", "🃏")
+	var r_rarity: String = r_info.get("rarity", "common").to_upper()
+	var r_tip: String = r_info.get("tip", "Provides passive synergy bonuses during hand calculation.")
+	
+	if relic_modal_rarity:
+		relic_modal_rarity.text = "★ %s JOKER ★" % r_rarity
+	if relic_modal_title:
+		relic_modal_title.text = "%s %s" % [r_icon, r_info.name.to_upper()]
+	if relic_modal_desc:
+		relic_modal_desc.text = r_info.desc
+	if relic_modal_tip:
+		relic_modal_tip.text = "💡 Strategy: %s" % r_tip
+		
+	if relic_detail_modal:
+		relic_detail_modal.visible = true
+	play_sfx(sound_click)
 
 func _build_board_ui() -> void:
 	for child in board_container.get_children():

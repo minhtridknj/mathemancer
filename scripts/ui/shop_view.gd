@@ -95,7 +95,10 @@ func _create_item_card(item_id: String, item_name: String, item_desc: String, co
 	pc.add_child(vbox)
 	
 	var title := Label.new()
-	title.text = item_name
+	var icon_prefix := ""
+	if is_relic and Relics.RELIC_DEFINITIONS.has(item_id):
+		icon_prefix = Relics.RELIC_DEFINITIONS[item_id].get("icon", "") + " "
+	title.text = "%s%s" % [icon_prefix, item_name]
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.add_theme_color_override("font_color", Color("#ffd24d") if is_relic else Color("#4dd2ff"))

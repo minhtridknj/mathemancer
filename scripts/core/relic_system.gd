@@ -9,31 +9,46 @@ const RELIC_DEFINITIONS = {
 		"name": "Blackjack Relic",
 		"desc": "Multiplies Mult by ×3 when playing Blackjack 21",
 		"cost": 6,
-		"rarity": "rare"
+		"rarity": "rare",
+		"icon": "🃏",
+		"short_desc": "×3 Mult on Blackjack 21",
+		"tip": "Form card combinations summing to exactly 21 to trigger a massive 3× multiplier!"
 	},
 	"relic_flame_wrath": {
 		"name": "Wrath of Flame",
 		"desc": "+12 Mult for each Flame 🔥 card in hand",
 		"cost": 5,
-		"rarity": "uncommon"
+		"rarity": "uncommon",
+		"icon": "🔥",
+		"short_desc": "+12 Mult / Flame card",
+		"tip": "Select cards with the Flame element to stack heavy multiplier boosts."
 	},
 	"relic_frost_shield": {
 		"name": "Glacial Aegis",
 		"desc": "+15 Chips for each Frost ❄️ card in hand",
 		"cost": 4,
-		"rarity": "common"
+		"rarity": "common",
+		"icon": "❄️",
+		"short_desc": "+15 Chips / Frost card",
+		"tip": "Frost cards boost your base chips directly before multiplier calculation."
 	},
 	"relic_mine_magnifier": {
 		"name": "Mine Magnifier",
 		"desc": "Each correctly flagged mine grants permanent +20 Chips to all hands",
 		"cost": 6,
-		"rarity": "uncommon"
+		"rarity": "uncommon",
+		"icon": "🚩",
+		"short_desc": "+20 Chips / Flagged mine",
+		"tip": "Deductively flag all mines on the board before playing hands to maximize free chips."
 	},
 	"relic_sudoku_compass": {
 		"name": "Sudoku Compass",
 		"desc": "If hand contains 4 all-distinct digits, grants +35 Chips and +8 Mult",
 		"cost": 7,
-		"rarity": "rare"
+		"rarity": "rare",
+		"icon": "🧭",
+		"short_desc": "+35 Chips & +8 Mult (4 distinct)",
+		"tip": "Play 4 cards with all distinct numbers (e.g. 1-2-3-4) to activate both chips and mult."
 	}
 }
 
