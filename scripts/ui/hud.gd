@@ -478,6 +478,11 @@ func _on_gm_round_won() -> void:
 
 func _on_gm_game_over() -> void:
 	game_over_modal.visible = true
+	var msg_label: Label = $GameOverModal/VBox/MsgLabel
+	if game_manager.boss_hp > 0 and game_manager.get_remaining_safe_tiles_count() == 0:
+		msg_label.text = "All safe tiles on the board have been exhausted,\nbut the Boss survived with %d HP left!\nTry crafting stronger poker hands next run." % game_manager.boss_hp
+	else:
+		msg_label.text = "You ran out of plays before defeating the Boss (%d HP left).\nTry crafting stronger poker hands next run!" % game_manager.boss_hp
 
 func _open_shop() -> void:
 	round_won_modal.visible = false

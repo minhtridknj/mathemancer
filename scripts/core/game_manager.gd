@@ -105,7 +105,7 @@ func click_tile(r: int, c: int) -> bool:
 		plays_left -= 1
 		emit_signal("mine_triggered", r, c)
 		emit_signal("plays_changed", plays_left)
-		if plays_left <= 0:
+		if plays_left <= 0 or (boss_hp > 0 and get_remaining_safe_tiles_count() == 0):
 			emit_signal("game_over")
 		return false
 	else:
@@ -128,6 +128,14 @@ func toggle_flag(r: int, c: int) -> bool:
 			
 	emit_signal("tile_flagged", r, c, flagged[r][c])
 	return true
+
+func get_remaining_safe_tiles_count() -> int:
+	var count := 0
+	for r in range(grid_size):
+		for c in range(grid_size):
+			if not board_data.cells[r][c].is_mine and not exhausted[r][c]:
+				count += 1
+	return count
 
 func play_hand(selected_coords: Array[Vector2i]) -> Dictionary:
 	if selected_coords.is_empty() or selected_coords.size() > 5:
@@ -178,7 +186,7 @@ func play_hand(selected_coords: Array[Vector2i]) -> Dictionary:
 		gold += reward
 		emit_signal("gold_changed", gold)
 		emit_signal("round_won")
-	elif plays_left <= 0:
+	elif plays_left <= 0 or get_remaining_safe_tiles_count() == 0:
 		emit_signal("game_over")
 		
 	return eval_res

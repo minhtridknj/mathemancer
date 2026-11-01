@@ -63,4 +63,31 @@ static func run_tests() -> bool:
 		print("❌ FAIL Played tiles were not marked exhausted")
 		all_ok = false
 		
+	# 4. Test Game Over when board runs out of safe tiles before Boss defeat
+	var gm2 := GameManager.new()
+	gm2.start_ante(1, 42)
+	var tracker := {"game_over": false}
+	gm2.game_over.connect(func():
+		tracker["game_over"] = true
+	)
+	gm2.boss_hp = 10000 # Boss still alive
+	gm2.plays_left = 5  # Plays still remaining (> 0)
+	
+	# Exhaust all safe tiles except a final hand of 2 tiles
+	var remaining_safe: Array[Vector2i] = []
+	for r in range(gm2.grid_size):
+		for c in range(gm2.grid_size):
+			if not gm2.board_data.cells[r][c].is_mine:
+				if remaining_safe.size() < 2:
+					remaining_safe.append(Vector2i(r, c))
+				else:
+					gm2.exhausted[r][c] = true
+					
+	gm2.play_hand(remaining_safe)
+	if not tracker["game_over"]:
+		print("❌ FAIL game_over not emitted when all safe tiles exhausted!")
+		all_ok = false
+	else:
+		print("  ✅ PASS Game Over triggered when all board tiles exhausted with Boss alive")
+		
 	return all_ok
