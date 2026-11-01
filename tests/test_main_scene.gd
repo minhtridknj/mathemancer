@@ -46,11 +46,15 @@ static func run_tests(parent_node: Node) -> bool:
 		print("❌ FAIL Row 0 clue is fogged at start!")
 		main.queue_free()
 		return false
-	if row0_clue.sum != 10:
-		print("❌ FAIL Row 0 safe sum should be 10 for deterministic start, got %d" % row0_clue.sum)
+	if row0_clue.sum <= 0:
+		print("❌ FAIL Row 0 safe sum should be positive, got %d" % row0_clue.sum)
 		main.queue_free()
 		return false
-	print("  ✅ PASS Stage 1 clues visible with guaranteed safe Row 0 (sum 10, Rank 1)")
+	if row0_clue.rank < 1:
+		print("❌ FAIL Row 0 rank should be >= 1, got %d" % row0_clue.rank)
+		main.queue_free()
+		return false
+	print("  ✅ PASS Stage 1 clues visible and valid at start (sum %d, Rank %d)" % [row0_clue.sum, row0_clue.rank])
 
 	# 4. Simulate selecting an open tile and checking hand preview
 	var opened_pos: Vector2i = Vector2i(-1, -1)

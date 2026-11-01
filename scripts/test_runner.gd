@@ -45,11 +45,17 @@ func _ready() -> void:
 	if not TestE2EGameplay.run_tests():
 		all_passed = false
 		
-	# Task 10: 20-Run Auto-Play Simulation Benchmark (Target >= 75% Win Rate across Ante 1-8)
+	# Task 10: 20-Run Auto-Play Simulation Benchmark (Full Board Deduction 100% required, Win Rate >= 75%)
 	const AutoPlayBench = preload("res://tests/auto_play_benchmark.gd")
 	var bench_res = AutoPlayBench.run_benchmark(20)
+	if bench_res.get("full_board_solve_rate", 0.0) < 100.0:
+		print("❌ FAIL Full Board Deduction rate below 100%%: %.1f%%" % bench_res.full_board_solve_rate)
+		all_passed = false
+	else:
+		print("  ✅ PASS 100%% Full Board Deduction confirmed: all %d boards fully resolved purely by logic (Zero Guessing)" % bench_res.total_boards)
+		
 	if bench_res.win_rate < 75.0:
-		print("❌ FAIL Auto-Play benchmark win rate below 75%: %.1f%" % bench_res.win_rate)
+		print("❌ FAIL Auto-Play benchmark win rate below 75%: %.1f%%" % bench_res.win_rate)
 		all_passed = false
 	else:
 		print("  ✅ PASS Auto-Play Benchmark achieved %.1f%% Win Rate (>= 75%% required)" % bench_res.win_rate)

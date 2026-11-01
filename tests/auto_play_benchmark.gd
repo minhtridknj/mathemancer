@@ -12,6 +12,8 @@ static func run_benchmark(num_runs: int = 20) -> Dictionary:
 	print("=======================================================")
 	
 	var wins := 0
+	var total_boards := 0
+	var boards_fully_solved := 0
 	var losses_by_ante := {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0}
 	var run_logs: Array[Dictionary] = []
 	
@@ -19,20 +21,26 @@ static func run_benchmark(num_runs: int = 20) -> Dictionary:
 		var seed_val := 1000 + run_idx * 73
 		var run_result := _simulate_single_run(run_idx + 1, seed_val)
 		run_logs.append(run_result)
+		total_boards += int(run_result.get("boards_tested", 0))
+		boards_fully_solved += int(run_result.get("boards_solved", 0))
 		
 		if run_result.won:
 			wins += 1
-			print("🏆 Run %2d [Seed %d]: WON ANTE 8! Relics: %s, Gold: %d" % [run_idx + 1, seed_val, str(run_result.final_relics), run_result.final_gold])
+			print("🏆 Run %2d [Seed %d]: WON ANTE 8! All boards fully solved by pure deduction. Relics: %s, Gold: %d" % [
+				run_idx + 1, seed_val, str(run_result.final_relics), run_result.final_gold
+			])
 		else:
 			losses_by_ante[run_result.failed_ante] += 1
-			print("❌ Run %2d [Seed %d]: FAILED AT ANTE %d (Boss HP left: %d / %d, Dmg dealt: %d)" % [
-				run_idx + 1, seed_val, run_result.failed_ante, run_result.boss_hp_left, run_result.max_boss_hp, run_result.dmg_dealt
+			print("❌ Run %2d [Seed %d]: FAILED AT ANTE %d (%s)" % [
+				run_idx + 1, seed_val, run_result.failed_ante, run_result.get("fail_reason", "Boss not defeated")
 			])
 			
 	var win_rate := float(wins) / float(num_runs) * 100.0
+	var full_board_solve_rate := float(boards_fully_solved) / float(maxi(1, total_boards)) * 100.0
 	print("\n=======================================================")
 	print("📊 BENCHMARK RESULTS SUMMARY:")
-	print("  Total Runs: %d" % num_runs)
+	print("  Total Runs: %d (Total Ante Boards Tested: %d)" % [num_runs, total_boards])
+	print("  Full Board Solved by Deduction: %d / %d (%.1f%%)" % [boards_fully_solved, total_boards, full_board_solve_rate])
 	print("  Victories (Ante 8 Cleared): %d / %d (%.1f%%)" % [wins, num_runs, win_rate])
 	print("  Losses by Ante: %s" % str(losses_by_ante))
 	print("=======================================================\n")
@@ -41,6 +49,9 @@ static func run_benchmark(num_runs: int = 20) -> Dictionary:
 		"total_runs": num_runs,
 		"wins": wins,
 		"win_rate": win_rate,
+		"total_boards": total_boards,
+		"boards_fully_solved": boards_fully_solved,
+		"full_board_solve_rate": full_board_solve_rate,
 		"losses_by_ante": losses_by_ante,
 		"logs": run_logs
 	}
@@ -52,39 +63,44 @@ static func _simulate_single_run(run_id: int, seed_val: int) -> Dictionary:
 	
 	var won_game := true
 	var failed_ante := -1
+	var fail_reason := ""
 	var last_hp_left := 0
 	var last_max_hp := 0
 	var last_dmg := 0
+	var boards_tested := 0
+	var boards_solved := 0
 	
 	for ante in range(1, 9):
+		boards_tested += 1
 		# 1. Start Ante
 		var ante_seed := seed_val + ante * 137
 		gm.start_ante(ante, ante_seed)
 		
-		# 2. Perfect deduction: reveal all safe tiles and flag all mines
-		var safe_coords: Array[Vector2i] = []
-		for r in range(gm.grid_size):
-			for c in range(gm.grid_size):
-				if gm.board_data.cells[r][c].is_mine:
-					gm.flagged[r][c] = true
-					gm.correct_flags += 1
-				else:
-					gm.revealed[r][c] = true
-					safe_coords.append(Vector2i(r, c))
-					
+		# 2. Step-by-Step Deductive Solver:
+		# Không nhìn trộm trước mìn, giải toàn bộ 100% ô trên bàn cờ bằng suy luận thuần túy
+		var solve_ok := _deductive_solve_board(gm)
+		if not solve_ok:
+			won_game = false
+			failed_ante = ante
+			fail_reason = "Deduction incomplete: board could not be 100% solved by logic"
+			break
+			
+		boards_solved += 1
+		
 		# Use scrolls if applicable (e.g. transmute suits to match owned relics)
 		_use_inventory_scrolls(gm)
 		
-		# 3. Play optimal hands
+		# 3. Play optimal hands from the fully resolved safe tiles
 		var total_ante_dmg := 0
 		var ante_max_hp := gm.max_boss_hp
 		
 		while gm.plays_left > 0 and gm.boss_hp > 0:
 			var available_coords: Array[Vector2i] = []
-			for pos in safe_coords:
-				if not gm.exhausted[pos.x][pos.y]:
-					available_coords.append(pos)
-					
+			for r in range(gm.grid_size):
+				for c in range(gm.grid_size):
+					if gm.revealed[r][c] and not gm.exhausted[r][c]:
+						available_coords.append(Vector2i(r, c))
+						
 			if available_coords.is_empty():
 				break
 				
@@ -98,6 +114,7 @@ static func _simulate_single_run(run_id: int, seed_val: int) -> Dictionary:
 		if gm.boss_hp > 0:
 			won_game = false
 			failed_ante = ante
+			fail_reason = "Boss HP left: %d / %d, Dmg dealt: %d" % [gm.boss_hp, ante_max_hp, total_ante_dmg]
 			last_hp_left = gm.boss_hp
 			last_max_hp = ante_max_hp
 			last_dmg = total_ante_dmg
@@ -112,12 +129,192 @@ static func _simulate_single_run(run_id: int, seed_val: int) -> Dictionary:
 		"seed": seed_val,
 		"won": won_game,
 		"failed_ante": failed_ante,
+		"fail_reason": fail_reason,
+		"boards_tested": boards_tested,
+		"boards_solved": boards_solved,
 		"boss_hp_left": last_hp_left,
 		"max_boss_hp": last_max_hp,
 		"dmg_dealt": last_dmg,
 		"final_relics": gm.owned_relics.duplicate(),
 		"final_gold": gm.gold
 	}
+
+static func _deductive_solve_board(gm: GameManagerClass) -> bool:
+	var sz := gm.grid_size
+	
+	# Mở các ô mỏ neo ban đầu (given anchors)
+	for r in range(sz):
+		for c in range(sz):
+			if gm.board_data.cells[r][c].is_given and not gm.revealed[r][c]:
+				gm.click_tile(r, c)
+				
+	var max_iterations := 60
+	var iter := 0
+	
+	while iter < max_iterations:
+		iter += 1
+		var progress := false
+		
+		# Quét suy luận liên tục qua các hàng và cột khả dụng
+		var line_progress := true
+		while line_progress:
+			line_progress = false
+			
+			# Quét Hàng
+			for r in range(sz):
+				var clue: Dictionary = gm.board_data.row_clues[r]
+				if clue.unlocked_at_stage > gm.current_stage:
+					continue
+					
+				var known_safe_sum := 0
+				var unk: Array[Vector2i] = []
+				for c in range(sz):
+					if gm.revealed[r][c]:
+						known_safe_sum += int(gm.board_data.cells[r][c].val)
+					elif not gm.flagged[r][c]:
+						unk.append(Vector2i(r, c))
+						
+				if unk.is_empty():
+					continue
+					
+				var rem_safe: int = int(clue.sum) - known_safe_sum
+				if rem_safe == 0:
+					for p in unk:
+						if not gm.flagged[p.x][p.y]:
+							gm.toggle_flag(p.x, p.y)
+							line_progress = true
+							progress = true
+					continue
+					
+				var n := unk.size()
+				if n <= 10:
+					var valid_masks: Array[int] = []
+					for mask in range(1 << n):
+						var s := 0
+						for k in range(n):
+							if mask & (1 << k):
+								s += int(gm.board_data.cells[unk[k].x][unk[k].y].val)
+						if s == rem_safe:
+							valid_masks.append(mask)
+							
+					if valid_masks.is_empty():
+						return false
+						
+					var all_m := valid_masks[0]
+					var any_m := valid_masks[0]
+					for m in valid_masks:
+						all_m &= m
+						any_m |= m
+						
+					for k in range(n):
+						var p := unk[k]
+						if (all_m & (1 << k)) and not gm.revealed[p.x][p.y]:
+							if gm.board_data.cells[p.x][p.y].is_mine:
+								return false # Lỗi suy luận nếu click trúng mìn
+							gm.click_tile(p.x, p.y)
+							line_progress = true
+							progress = true
+						if not (any_m & (1 << k)) and not gm.flagged[p.x][p.y]:
+							gm.toggle_flag(p.x, p.y)
+							line_progress = true
+							progress = true
+
+			# Quét Cột
+			for c in range(sz):
+				var clue: Dictionary = gm.board_data.col_clues[c]
+				if clue.unlocked_at_stage > gm.current_stage:
+					continue
+					
+				var known_safe_sum := 0
+				var unk: Array[Vector2i] = []
+				for r in range(sz):
+					if gm.revealed[r][c]:
+						known_safe_sum += int(gm.board_data.cells[r][c].val)
+					elif not gm.flagged[r][c]:
+						unk.append(Vector2i(r, c))
+						
+				if unk.is_empty():
+					continue
+					
+				var rem_safe: int = int(clue.sum) - known_safe_sum
+				if rem_safe == 0:
+					for p in unk:
+						if not gm.flagged[p.x][p.y]:
+							gm.toggle_flag(p.x, p.y)
+							line_progress = true
+							progress = true
+					continue
+					
+				var n := unk.size()
+				if n <= 10:
+					var valid_masks: Array[int] = []
+					for mask in range(1 << n):
+						var s := 0
+						for k in range(n):
+							if mask & (1 << k):
+								s += int(gm.board_data.cells[unk[k].x][unk[k].y].val)
+						if s == rem_safe:
+							valid_masks.append(mask)
+							
+					if valid_masks.is_empty():
+						return false
+						
+					var all_m := valid_masks[0]
+					var any_m := valid_masks[0]
+					for m in valid_masks:
+						all_m &= m
+						any_m |= m
+						
+					for k in range(n):
+						var p := unk[k]
+						if (all_m & (1 << k)) and not gm.revealed[p.x][p.y]:
+							if gm.board_data.cells[p.x][p.y].is_mine:
+								return false
+							gm.click_tile(p.x, p.y)
+							line_progress = true
+							progress = true
+						if not (any_m & (1 << k)) and not gm.flagged[p.x][p.y]:
+							gm.toggle_flag(p.x, p.y)
+							line_progress = true
+							progress = true
+
+		# Kiểm tra xem toàn bộ ô đã được phân định rõ ràng hay chưa
+		var unresolved := 0
+		for r in range(sz):
+			for c in range(sz):
+				if not gm.revealed[r][c] and not gm.flagged[r][c]:
+					unresolved += 1
+					
+		if unresolved == 0:
+			# Xác thực 100% chính xác: không cắm cờ nhầm và không bỏ sót ô an toàn
+			for r in range(sz):
+				for c in range(sz):
+					if gm.board_data.cells[r][c].is_mine and not gm.flagged[r][c]:
+						return false
+					if not gm.board_data.cells[r][c].is_mine and not gm.revealed[r][c]:
+						return false
+			return true
+			
+		# Nếu hết đường suy luận ở Chặng 1, giải trừ sương mù sang Chặng 2 bằng 1 Hand bài an toàn
+		if not progress and gm.current_stage == 1:
+			var safe_avail: Array[Vector2i] = []
+			for r in range(sz):
+				for c in range(sz):
+					if gm.revealed[r][c] and not gm.exhausted[r][c]:
+						safe_avail.append(Vector2i(r, c))
+			if safe_avail.is_empty():
+				return false
+				
+			var best_dispell_hand := _find_best_hand(gm, safe_avail)
+			if best_dispell_hand.is_empty():
+				best_dispell_hand = safe_avail.slice(0, mini(5, safe_avail.size()))
+			gm.play_hand(best_dispell_hand)
+			progress = true
+		elif not progress:
+			# Kẹt không thể suy luận tiếp mà không đoán mò
+			return false
+			
+	return false
 
 static func _find_best_hand(gm: GameManagerClass, available_coords: Array[Vector2i]) -> Array[Vector2i]:
 	# Greedy search across all 1 to 5 card combinations from available coords
@@ -148,7 +345,9 @@ static func _find_best_hand(gm: GameManagerClass, available_coords: Array[Vector
 			var dmg: int = int(round(float(eval_res.get("total_chips", 0)) * float(eval_res.get("mult", 1.0))))
 			if dmg > max_dmg:
 				max_dmg = dmg
-				best_coords = combo
+				best_coords.clear()
+				for p in combo:
+					best_coords.append(p)
 				
 	return best_coords
 

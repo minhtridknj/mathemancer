@@ -128,18 +128,59 @@ static func run_tests() -> bool:
 		print("❌ FAIL Staged Fog of War missing stages")
 		all_ok = false
 		
-	# 5. Guaranteed 100% Guess-Free Deductive Solvability across 20 random seeds
+	# 5. Guaranteed 100% Guess-Free Deductive Solvability & Dynamic Ranking across 25 random seeds
 	var solvability_ok := true
-	for i in range(20):
+	var observed_rank1_zero := false
+	var observed_rank1_positive := false
+	var observed_gap_greater_than_one := false
+	
+	for i in range(25):
 		var test_board = BoardGenerator.generate_level(4, 1, i * 37 + 101)
 		if not BoardGenerator.is_board_100_percent_solvable(test_board):
-			print("❌ FAIL Board generation produced a 50/50 ambiguous board at seed %d" % (i * 37 + 101))
+			print("❌ FAIL Board generation produced an ambiguous board at seed %d" % (i * 37 + 101))
 			solvability_ok = false
 			break
 			
+		# Check Rank 1 mine count and gaps
+		var r_mines: Array[int] = []
+		for r in range(4):
+			var m := 0
+			for c in range(4):
+				if test_board.cells[r][c].is_mine: m += 1
+			r_mines.append(m)
+		for c in range(4):
+			var m := 0
+			for r in range(4):
+				if test_board.cells[r][c].is_mine: m += 1
+			r_mines.append(m)
+			
+		var unique_m: Array[int] = []
+		for m in r_mines:
+			if not unique_m.has(m): unique_m.append(m)
+		unique_m.sort()
+		
+		if unique_m[0] == 0:
+			observed_rank1_zero = true
+		else:
+			observed_rank1_positive = true
+			
+		for idx in range(unique_m.size() - 1):
+			if unique_m[idx + 1] - unique_m[idx] > 1:
+				observed_gap_greater_than_one = true
+				
 	if solvability_ok:
-		print("  ✅ PASS 100% Guess-Free Solvability mathematically verified across 20 seeds (Zero 50/50)")
+		print("  ✅ PASS 100% Guess-Free Solvability mathematically verified across 25 seeds (Zero 50/50)")
 	else:
 		all_ok = false
 		
+	if observed_rank1_zero and observed_rank1_positive:
+		print("  ✅ PASS Dynamic Rank 1 confirmed: Rank 1 can have 0 mines or >= 1 mines depending on the board")
+	else:
+		print("⚠️ Note: Dynamic Rank 1 distribution: zero=%s, positive=%s" % [str(observed_rank1_zero), str(observed_rank1_positive)])
+		
+	if observed_gap_greater_than_one:
+		print("  ✅ PASS Unpredictable Mine Gaps confirmed: Ranks can differ by more than 1 mine")
+	else:
+		print("⚠️ Note: Observed gaps between ranks")
+
 	return all_ok

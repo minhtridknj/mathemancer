@@ -64,30 +64,68 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		cells.append(row)
 
 	# 3. Gieo mìn dựa theo Ante và Grid Size
-	# Đảm bảo Hàng 0 luôn có 0 mìn để người chơi luôn có xuất phát điểm 100% chắc chắn
+	# Cho phép rải mìn tự do trên mọi hàng/cột (kể cả Hàng 0).
+	# Thiết lập các cấu trúc phân bổ ngẫu nhiên để:
+	# - Rank 1 có thể có 0 mìn HOẶC >= 1 mìn (người chơi tự suy luận).
+	# - Khoảng cách chênh lệch mìn giữa các rank là ngẫu nhiên (1, 2, 3... quả mìn).
 	var target_mines := 3
-	if grid_size == 4: target_mines = 3
-	elif grid_size == 5: target_mines = 5
-	elif grid_size == 6: target_mines = 8
+	if grid_size == 4: target_mines = 3 if ante == 1 else rng.randi_range(3, 4)
+	elif grid_size == 5: target_mines = rng.randi_range(5, 6)
+	elif grid_size == 6: target_mines = rng.randi_range(7, 9)
 	else: target_mines = int(grid_size * 1.5)
 	
-	var placed_mines := 0
-	var attempts := 0
-	while placed_mines < target_mines and attempts < 100:
-		attempts += 1
-		var mr := rng.randi_range(1, grid_size - 1)
-		var mc := rng.randi_range(0, grid_size - 1)
-		if not cells[mr][mc].is_mine:
-			var r_mines := 0
-			for c in range(grid_size):
-				if cells[mr][c].is_mine: r_mines += 1
-			var c_mines := 0
+	# Chọn ngẫu nhiên chiến lược gieo mìn:
+	# Mode 0: Gapped pattern (tạo khoảng cách chênh lệch 2-3 quả mìn giữa các rank)
+	# Mode 1: Non-zero min rank (mọi hàng/cột đều có ít nhất 1 mìn -> Rank 1 có >= 1 mìn)
+	# Mode 2: Phân bổ ngẫu nhiên tự do trên toàn bộ lưới
+	var mode := rng.randi_range(1, 2) if ante == 1 else rng.randi_range(0, 2)
+	
+	if mode == 0 and grid_size >= 4:
+		# Gieo mìn tại giao điểm các hàng & cột được chọn để tạo bước nhảy rank (ví dụ {0, 2} hoặc {0, 3})
+		var k := rng.randi_range(2, mini(3, grid_size - 1))
+		var all_indices: Array[int] = []
+		for i in range(grid_size): all_indices.append(i)
+		all_indices.shuffle()
+		var chosen_rows := all_indices.slice(0, k)
+		all_indices.shuffle()
+		var chosen_cols := all_indices.slice(0, k)
+		for r in chosen_rows:
+			for c in chosen_cols:
+				cells[r][c].is_mine = true
+	elif mode == 1:
+		# Đảm bảo mọi hàng và cột đều có mìn -> Rank 1 xuất phát từ >= 1 mìn
+		var col_perm: Array[int] = []
+		for i in range(grid_size): col_perm.append(i)
+		col_perm.shuffle()
+		for r in range(grid_size):
+			cells[r][col_perm[r]].is_mine = true
+		if ante >= 2 and rng.randf() < 0.5:
+			var avail: Array[Vector2i] = []
 			for r in range(grid_size):
-				if cells[r][mc].is_mine: c_mines += 1
-				
-			if r_mines < grid_size - 1 and c_mines < grid_size - 1:
-				cells[mr][mc].is_mine = true
-				placed_mines += 1
+				for c in range(grid_size):
+					if not cells[r][c].is_mine: avail.append(Vector2i(r, c))
+			if not avail.is_empty():
+				var extra_p := avail[rng.randi_range(0, avail.size() - 1)]
+				cells[extra_p.x][extra_p.y].is_mine = true
+	else:
+		# Rải mìn tự do ngẫu nhiên trên toàn bộ bàn cờ (kể cả Hàng 0)
+		var placed_mines := 0
+		var attempts := 0
+		while placed_mines < target_mines and attempts < 100:
+			attempts += 1
+			var mr := rng.randi_range(0, grid_size - 1)
+			var mc := rng.randi_range(0, grid_size - 1)
+			if not cells[mr][mc].is_mine:
+				var r_mines := 0
+				for c in range(grid_size):
+					if cells[mr][c].is_mine: r_mines += 1
+				var c_mines := 0
+				for r in range(grid_size):
+					if cells[r][mc].is_mine: c_mines += 1
+					
+				if r_mines < grid_size - 1 and c_mines < grid_size - 1:
+					cells[mr][mc].is_mine = true
+					placed_mines += 1
 
 	# 4. Tính toán số lượng mìn và Tổng Kakuro cho từng hàng & cột
 	var row_mines: Array[int] = []
@@ -118,6 +156,8 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		col_sums.append(s)
 
 	# 5. Xếp Hạng Thứ Bậc Mìn Tương Đối (Ordinal Mine Ranking)
+	# Rank thấp nhất luôn là Rank 1 (số mìn của Rank 1 có thể là 0 hoặc >= 1 do người chơi tự suy luận).
+	# Khoảng cách giữa các rank (Rank 1 -> Rank 2 -> Rank 3...) là ngẫu nhiên, không cố định chênh 1 quả.
 	var all_mine_counts: Array[int] = []
 	for m in row_mines:
 		if not all_mine_counts.has(m): all_mine_counts.append(m)
@@ -150,30 +190,25 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		})
 
 	# 7. Phân bổ ô mỏ neo chiến lược (Strategic Given Anchors)
-	# Quy tắc quan trọng: KHÔNG đặt mỏ neo ở Hàng 0 vì Hàng 0 đã có tổng = 10, Rank 1 (suy luận được ngay).
-	# Phân bổ đều mỗi hàng tiếp theo (Row 1, Row 2, Row 3) một ô an toàn ở các cột khác nhau
-	# để triệt tiêu hoàn toàn bất kỳ mẫu bẫy 2x2 (50/50).
-	var used_cols: Array[int] = []
-	for r in range(1, grid_size):
-		var safe_cols: Array[int] = []
+	# Tập hợp toàn bộ các ô an toàn trên bàn cờ
+	var safe_cells: Array[Vector2i] = []
+	for r in range(grid_size):
 		for c in range(grid_size):
 			if not cells[r][c].is_mine:
-				safe_cols.append(c)
-		safe_cols.shuffle()
+				safe_cells.append(Vector2i(r, c))
+				
+	for i in range(safe_cells.size()):
+		var swap_idx := rng.randi_range(0, safe_cells.size() - 1)
+		var tmp := safe_cells[i]
+		safe_cells[i] = safe_cells[swap_idx]
+		safe_cells[swap_idx] = tmp
 		
-		var chosen_col := -1
-		for c in safe_cols:
-			if not used_cols.has(c):
-				chosen_col = c
-				break
-		if chosen_col == -1 and not safe_cols.is_empty():
-			chosen_col = safe_cols[0]
-			
-		if chosen_col != -1:
-			cells[r][chosen_col].is_given = true
-			used_cols.append(chosen_col)
+	var base_anchors := 3 if grid_size <= 4 else (4 if grid_size == 5 else 5)
+	for i in range(mini(base_anchors, safe_cells.size())):
+		var p := safe_cells[i]
+		cells[p.x][p.y].is_given = true
 
-	return {
+	var candidate := {
 		"grid_size": grid_size,
 		"ante": ante,
 		"cells": cells,
@@ -181,11 +216,21 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		"col_clues": col_clues
 	}
 
+	# Nếu bàn cờ chưa giải được bằng logic với số mỏ neo cơ bản:
+	# Mở thêm dần từng ô an toàn ban đầu để đảm bảo 100% suy luận logic được đoạn đầu
+	if not is_board_100_percent_solvable(candidate):
+		for extra_idx in range(base_anchors, mini(base_anchors + 3, safe_cells.size())):
+			var p := safe_cells[extra_idx]
+			cells[p.x][p.y].is_given = true
+			if is_board_100_percent_solvable(candidate):
+				break
+
+	return candidate
+
 ## Bộ giải suy luận toán học (Logical Solver)
 ## Kiểm tra xem bàn cờ có thể giải được 100% bằng logic thuần túy hay không (không có điểm 50/50)
 static func is_board_100_percent_solvable(board_data: Dictionary) -> bool:
 	var sz: int = board_data.grid_size
-	var total_line_sum := sz * (sz + 1) / 2
 	var cells: Array = board_data.cells
 	
 	var is_safe: Array = []
@@ -211,13 +256,6 @@ static func is_board_100_percent_solvable(board_data: Dictionary) -> bool:
 			if clue.unlocked_at_stage > stage:
 				continue
 				
-			# Nếu tổng an toàn = tổng tuyệt đối của hàng -> toàn bộ ô trong hàng đều an toàn
-			if clue.sum == total_line_sum:
-				for c in range(sz):
-					if not is_safe[r][c]:
-						is_safe[r][c] = true
-						progress = true
-						
 			var known_safe_sum := 0
 			var unk_cells: Array[Vector2i] = []
 			for c in range(sz):
@@ -226,35 +264,43 @@ static func is_board_100_percent_solvable(board_data: Dictionary) -> bool:
 				elif not is_mine[r][c]:
 					unk_cells.append(Vector2i(r, c))
 					
+			if unk_cells.is_empty():
+				continue
+				
 			var rem_safe: int = int(clue.sum) - known_safe_sum
-			if not unk_cells.is_empty():
-				if rem_safe == 0:
-					for p in unk_cells:
-						is_mine[p.x][p.y] = true
+			if rem_safe == 0:
+				for p in unk_cells:
+					is_mine[p.x][p.y] = true
+					progress = true
+				continue
+				
+			var n := unk_cells.size()
+			if n <= 10:
+				var valid_masks: Array[int] = []
+				for mask in range(1 << n):
+					var s := 0
+					for i in range(n):
+						if mask & (1 << i):
+							s += cells[unk_cells[i].x][unk_cells[i].y].val
+					if s == rem_safe:
+						valid_masks.append(mask)
+						
+				if valid_masks.is_empty():
+					return false
+					
+				var all_m := valid_masks[0]
+				var any_m := valid_masks[0]
+				for m in valid_masks:
+					all_m &= m
+					any_m |= m
+					
+				for i in range(n):
+					if (all_m & (1 << i)) and not is_safe[unk_cells[i].x][unk_cells[i].y]:
+						is_safe[unk_cells[i].x][unk_cells[i].y] = true
 						progress = true
-				else:
-					var unk_sum := 0
-					for p in unk_cells:
-						unk_sum += cells[p.x][p.y].val
-					if rem_safe == unk_sum:
-						for p in unk_cells:
-							is_safe[p.x][p.y] = true
-							progress = true
-					elif unk_cells.size() == 1 and rem_safe == cells[unk_cells[0].x][unk_cells[0].y].val:
-						is_safe[unk_cells[0].x][unk_cells[0].y] = true
+					if not (any_m & (1 << i)) and not is_mine[unk_cells[i].x][unk_cells[i].y]:
+						is_mine[unk_cells[i].x][unk_cells[i].y] = true
 						progress = true
-					elif unk_sum - rem_safe > 0:
-						var mine_val: int = unk_sum - rem_safe
-						var matching: Array[Vector2i] = []
-						for p in unk_cells:
-							if cells[p.x][p.y].val == mine_val:
-								matching.append(p)
-						if matching.size() == 1:
-							is_mine[matching[0].x][matching[0].y] = true
-							for p in unk_cells:
-								if p != matching[0]:
-									is_safe[p.x][p.y] = true
-							progress = true
 
 		# Quét suy luận theo từng Cột
 		for c in range(sz):
@@ -262,12 +308,6 @@ static func is_board_100_percent_solvable(board_data: Dictionary) -> bool:
 			if clue.unlocked_at_stage > stage:
 				continue
 				
-			if clue.sum == total_line_sum:
-				for r in range(sz):
-					if not is_safe[r][c]:
-						is_safe[r][c] = true
-						progress = true
-						
 			var known_safe_sum := 0
 			var unk_cells: Array[Vector2i] = []
 			for r in range(sz):
@@ -276,35 +316,43 @@ static func is_board_100_percent_solvable(board_data: Dictionary) -> bool:
 				elif not is_mine[r][c]:
 					unk_cells.append(Vector2i(r, c))
 					
+			if unk_cells.is_empty():
+				continue
+				
 			var rem_safe: int = int(clue.sum) - known_safe_sum
-			if not unk_cells.is_empty():
-				if rem_safe == 0:
-					for p in unk_cells:
-						is_mine[p.x][p.y] = true
+			if rem_safe == 0:
+				for p in unk_cells:
+					is_mine[p.x][p.y] = true
+					progress = true
+				continue
+				
+			var n := unk_cells.size()
+			if n <= 10:
+				var valid_masks: Array[int] = []
+				for mask in range(1 << n):
+					var s := 0
+					for i in range(n):
+						if mask & (1 << i):
+							s += cells[unk_cells[i].x][unk_cells[i].y].val
+					if s == rem_safe:
+						valid_masks.append(mask)
+						
+				if valid_masks.is_empty():
+					return false
+					
+				var all_m := valid_masks[0]
+				var any_m := valid_masks[0]
+				for m in valid_masks:
+					all_m &= m
+					any_m |= m
+					
+				for i in range(n):
+					if (all_m & (1 << i)) and not is_safe[unk_cells[i].x][unk_cells[i].y]:
+						is_safe[unk_cells[i].x][unk_cells[i].y] = true
 						progress = true
-				else:
-					var unk_sum := 0
-					for p in unk_cells:
-						unk_sum += cells[p.x][p.y].val
-					if rem_safe == unk_sum:
-						for p in unk_cells:
-							is_safe[p.x][p.y] = true
-							progress = true
-					elif unk_cells.size() == 1 and rem_safe == cells[unk_cells[0].x][unk_cells[0].y].val:
-						is_safe[unk_cells[0].x][unk_cells[0].y] = true
+					if not (any_m & (1 << i)) and not is_mine[unk_cells[i].x][unk_cells[i].y]:
+						is_mine[unk_cells[i].x][unk_cells[i].y] = true
 						progress = true
-					elif unk_sum - rem_safe > 0:
-						var mine_val: int = unk_sum - rem_safe
-						var matching: Array[Vector2i] = []
-						for p in unk_cells:
-							if cells[p.x][p.y].val == mine_val:
-								matching.append(p)
-						if matching.size() == 1:
-							is_mine[matching[0].x][matching[0].y] = true
-							for p in unk_cells:
-								if p != matching[0]:
-									is_safe[p.x][p.y] = true
-							progress = true
 
 		# Giải trừ sương mù sang Chặng 2 khi đã suy luận được tối thiểu 3 ô an toàn ở Chặng 1
 		if not progress and stage == 1:
