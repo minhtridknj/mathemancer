@@ -116,6 +116,19 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		reserved_r = avail_r.pop_back()
 		reserved_c = avail_c.pop_back()
 
+	# Hàm kiểm tra đảm bảo mỗi hàng và cột luôn có ít nhất 1 ô an toàn (tối đa grid_size - 1 quả mìn)
+	var can_place_mine := func(target_r: int, target_c: int) -> bool:
+		if cells[target_r][target_c].is_mine: return false
+		var rm := 0
+		for c in range(grid_size):
+			if cells[target_r][c].is_mine: rm += 1
+		if rm >= grid_size - 1: return false
+		var cm := 0
+		for r in range(grid_size):
+			if cells[r][target_c].is_mine: cm += 1
+		if cm >= grid_size - 1: return false
+		return true
+
 	# Các chiến lược tạo bước nhảy rank ngẫu nhiên (gaps >= 1, 2, 3...)
 	# Chiến lược 0: Khối giao điểm k x k (tạo bước nhảy gap = k mìn)
 	# Chiến lược 1: Bó mìn theo hàng/cột (tạo bước nhảy 2-3 mìn trên cùng 1 đường)
@@ -123,12 +136,14 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 	var strat := rng.randi_range(0, 2)
 	
 	if strat == 0:
-		var k := rng.randi_range(2, mini(3, mini(avail_r.size(), avail_c.size())))
-		var sel_r := avail_r.slice(0, k)
-		var sel_c := avail_c.slice(0, k)
+		var max_k := mini(3, grid_size - 1 - min_mine_rank)
+		var k := rng.randi_range(2, maxi(2, max_k))
+		var sel_r := avail_r.slice(0, mini(k, avail_r.size()))
+		var sel_c := avail_c.slice(0, mini(k, avail_c.size()))
 		for r in sel_r:
 			for c in sel_c:
-				cells[r][c].is_mine = true
+				if can_place_mine.call(r, c):
+					cells[r][c].is_mine = true
 	elif strat == 1:
 		var num_bundles := rng.randi_range(1, 2)
 		for _b in range(num_bundles):
@@ -137,7 +152,7 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 			var bundle_len := rng.randi_range(2, 3)
 			var valid_cols: Array[int] = []
 			for c in avail_c:
-				if not cells[br][c].is_mine: valid_cols.append(c)
+				if can_place_mine.call(br, c): valid_cols.append(c)
 			valid_cols.shuffle()
 			for i in range(mini(bundle_len, valid_cols.size())):
 				cells[br][valid_cols[i]].is_mine = true
@@ -147,14 +162,16 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 			var sel_c := avail_c.slice(0, 2)
 			for r in sel_r:
 				for c in sel_c:
-					cells[r][c].is_mine = true
+					if can_place_mine.call(r, c):
+						cells[r][c].is_mine = true
 			if grid_size >= 6 and rng.randf() < 0.5:
 				var rem_r := avail_r.slice(2)
 				var rem_c := avail_c.slice(2)
 				if rem_r.size() >= 2 and rem_c.size() >= 2:
 					for r in rem_r.slice(0, 2):
 						for c in rem_c.slice(0, 2):
-							cells[r][c].is_mine = true
+							if can_place_mine.call(r, c):
+								cells[r][c].is_mine = true
 
 	# Bổ sung số lượng mìn tối thiểu theo kích thước bàn cờ (tránh quá ít mìn)
 	var target_min_mines := 3 if grid_size == 4 else (4 if grid_size == 5 else (6 if grid_size == 6 else (8 if grid_size == 7 else 10)))
@@ -168,7 +185,7 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 			if r == reserved_r: continue
 			for c in range(grid_size):
 				if c == reserved_c: continue
-				if not cells[r][c].is_mine: cand_cells.append(Vector2i(r, c))
+				if can_place_mine.call(r, c): cand_cells.append(Vector2i(r, c))
 		if cand_cells.is_empty(): break
 		var p: Vector2i = cand_cells[rng.randi_range(0, cand_cells.size() - 1)]
 		cells[p.x][p.y].is_mine = true
@@ -198,7 +215,7 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 			var placed := false
 			for c in range(grid_size):
 				if c == reserved_c: continue
-				if not cells[r][c].is_mine:
+				if can_place_mine.call(r, c):
 					cells[r][c].is_mine = true
 					placed = true
 					break
