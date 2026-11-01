@@ -1,4 +1,4 @@
-# 🔮 Mathemancer (Toán Thuật Sư)
+# 🔮 Mathemancer 
 
 A Roguelike Poker Puzzle Game built with **Godot 4.7+ (Forward+ / GDScript)**.
 
