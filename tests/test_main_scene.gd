@@ -153,5 +153,92 @@ static func run_tests(parent_node: Node) -> bool:
 		return false
 	print("  ✅ PASS RelicDetailModal closes cleanly upon user action")
 	
+	# ==========================================
+	# 8. Test In-Match Tarot Consumables UI & Usage
+	# ==========================================
+	if main.tarots_box.get_child_count() != 1:
+		print("❌ FAIL tarots_box should show 1 placeholder when 0 scrolls owned: count=%d" % main.tarots_box.get_child_count())
+		main.queue_free()
+		return false
+	print("  ✅ PASS Tarots Box displays placeholder slot when 0 scrolls owned")
+	
+	# Add Ascension Scroll (scroll_value_boost)
+	main.game_manager.owned_scrolls.append("scroll_value_boost")
+	main._update_tarots_ui()
+	if main.tarots_box.get_child_count() != 1:
+		print("❌ FAIL tarots_box should show 1 tarot card")
+		main.queue_free()
+		return false
+	var tarot_card = main.tarots_box.get_child(0)
+	if not (tarot_card is PanelContainer) or not tarot_card.tooltip_text.contains("Ascension Scroll"):
+		print("❌ FAIL tarot card not a PanelContainer or tooltip missing Ascension Scroll")
+		main.queue_free()
+		return false
+	print("  ✅ PASS Owned Tarot displayed as interactive consumable slot with rich tooltip")
+	
+	# Open TarotActionModal
+	main.open_tarot_modal("scroll_value_boost")
+	if not main.tarot_action_modal.visible:
+		print("❌ FAIL tarot_action_modal not visible after open_tarot_modal")
+		main.queue_free()
+		return false
+	if not main.tarot_modal_use_btn.disabled:
+		print("❌ FAIL USE button should be disabled when 0 cards selected on board")
+		main.queue_free()
+		return false
+	print("  ✅ PASS TarotActionModal opens and requires target card selection")
+	
+	# Select 1 card on the board to target
+	var target_r := -1
+	var target_c := -1
+	for r in range(main.game_manager.grid_size):
+		for c in range(main.game_manager.grid_size):
+			if not main.game_manager.board_data.cells[r][c].is_mine:
+				target_r = r
+				target_c = c
+				break
+		if target_r >= 0: break
+		
+	var orig_val: int = int(main.game_manager.board_data.cells[target_r][target_c].val)
+	main._on_tile_selected_toggled(target_r, target_c, true)
+	if main.tarot_modal_use_btn.disabled:
+		print("❌ FAIL USE button should be enabled after selecting 1 target card")
+		main.queue_free()
+		return false
+	print("  ✅ PASS Target card dynamically detected and USE button enabled")
+	
+	# Press USE button
+	main.tarot_modal_use_btn.emit_signal("pressed")
+	var new_val: int = int(main.game_manager.board_data.cells[target_r][target_c].val)
+	if new_val != orig_val + 2:
+		print("❌ FAIL Ascension scroll did not boost tile value by +2: was %d, now %d" % [orig_val, new_val])
+		main.queue_free()
+		return false
+	if main.tarot_action_modal.visible:
+		print("❌ FAIL tarot_action_modal should close after scroll used")
+		main.queue_free()
+		return false
+	if not main.game_manager.owned_scrolls.is_empty():
+		print("❌ FAIL used scroll should be consumed from inventory")
+		main.queue_free()
+		return false
+	print("  ✅ PASS Tarot Scroll successfully executed on target card and consumed!")
+	
+	# Test Instant Scroll: scroll_restore_play
+	main.game_manager.owned_scrolls.append("scroll_restore_play")
+	main.game_manager.plays_left = 2
+	main._update_tarots_ui()
+	main.open_tarot_modal("scroll_restore_play")
+	if main.tarot_modal_use_btn.disabled:
+		print("❌ FAIL Instant scroll USE button should be enabled without card selection")
+		main.queue_free()
+		return false
+	main.tarot_modal_use_btn.emit_signal("pressed")
+	if main.game_manager.plays_left != 3:
+		print("❌ FAIL scroll_restore_play did not restore play: plays=%d" % main.game_manager.plays_left)
+		main.queue_free()
+		return false
+	print("  ✅ PASS Instant Restoration Scroll restores play count cleanly!")
+	
 	main.queue_free()
 	return true

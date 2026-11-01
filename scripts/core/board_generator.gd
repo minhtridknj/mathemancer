@@ -64,11 +64,6 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		cells.append(row)
 
 	# 3. Gieo mìn dựa theo Ante và Grid Size
-	# Cho phép rải mìn tự do trên mọi hàng/cột (kể cả Hàng 0) ngay từ Ante 1.
-	# Thiết lập các cấu trúc phân bổ ngẫu nhiên để:
-	# - Rank 1 có thể có 0 mìn HOẶC >= 1 mìn (người chơi tự suy luận).
-	# - Khoảng cách chênh lệch mìn giữa các rank là ngẫu nhiên (1, 2, 3... quả mìn).
-	# 3. Gieo mìn dựa theo Ante và Grid Size
 	# Thiết lập các cấu trúc phân bổ ngẫu nhiên để:
 	# - Rank 1 có thể có 0 mìn HOẶC >= 1 mìn (người chơi tự suy luận, không đoán trước được ở mọi Ante).
 	# - Khoảng cách chênh lệch mìn giữa các rank là ngẫu nhiên (1, 2, 3... quả mìn).
@@ -117,8 +112,15 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		reserved_c = avail_c.pop_back()
 
 	# Hàm kiểm tra đảm bảo mỗi hàng và cột luôn có ít nhất 1 ô an toàn (tối đa grid_size - 1 quả mìn)
+	# Với lưới 4x4, giới hạn tổng số mìn tối đa là 5 quả để đảm bảo người chơi có đủ bài (ít nhất 11 ô an toàn)
 	var can_place_mine := func(target_r: int, target_c: int) -> bool:
 		if cells[target_r][target_c].is_mine: return false
+		if grid_size <= 4:
+			var tot := 0
+			for r in range(grid_size):
+				for c in range(grid_size):
+					if cells[r][c].is_mine: tot += 1
+			if tot >= 5: return false
 		var rm := 0
 		for c in range(grid_size):
 			if cells[target_r][c].is_mine: rm += 1
@@ -155,7 +157,8 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 				if can_place_mine.call(br, c): valid_cols.append(c)
 			valid_cols.shuffle()
 			for i in range(mini(bundle_len, valid_cols.size())):
-				cells[br][valid_cols[i]].is_mine = true
+				if can_place_mine.call(br, valid_cols[i]):
+					cells[br][valid_cols[i]].is_mine = true
 	else:
 		if avail_r.size() >= 2 and avail_c.size() >= 2:
 			var sel_r := avail_r.slice(0, 2)

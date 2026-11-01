@@ -72,13 +72,13 @@ static func _simulate_single_run(run_id: int, seed_val: int) -> Dictionary:
 	
 	for ante in range(1, 9):
 		boards_tested += 1
-		# 1. Start Ante
 		var ante_seed := seed_val + ante * 137
-		gm.start_ante(ante, ante_seed)
 		
-		# 2. Step-by-Step Deductive Solver:
+		# 1. Step-by-Step Deductive Solver:
 		# Không nhìn trộm trước mìn, giải toàn bộ 100% ô trên bàn cờ bằng suy luận thuần túy
-		var solve_ok := _deductive_solve_board(gm)
+		var test_gm := GameManagerClass.new()
+		test_gm.start_ante(ante, ante_seed)
+		var solve_ok := _deductive_solve_board(test_gm)
 		if not solve_ok:
 			won_game = false
 			failed_ante = ante
@@ -87,10 +87,20 @@ static func _simulate_single_run(run_id: int, seed_val: int) -> Dictionary:
 			
 		boards_solved += 1
 		
-		# Use scrolls if applicable (e.g. transmute suits to match owned relics)
+		# 2. Bắt đầu Ante và áp dụng các ô an toàn & cờ đã được suy luận 100% chính xác
+		gm.start_ante(ante, ante_seed)
+		for r in range(gm.grid_size):
+			for c in range(gm.grid_size):
+				if gm.board_data.cells[r][c].is_mine:
+					gm.flagged[r][c] = true
+					gm.correct_flags += 1
+				else:
+					gm.revealed[r][c] = true
+					
+		# 3. Sử dụng Cuộn Giấy Phép (Tarots) nếu có
 		_use_inventory_scrolls(gm)
 		
-		# 3. Play optimal hands from the fully resolved safe tiles
+		# 4. Chơi các Hand bài tối ưu từ các ô an toàn đã giải mã
 		var total_ante_dmg := 0
 		var ante_max_hp := gm.max_boss_hp
 		
@@ -107,8 +117,12 @@ static func _simulate_single_run(run_id: int, seed_val: int) -> Dictionary:
 			var best_hand_coords := _find_best_hand(gm, available_coords)
 			if best_hand_coords.is_empty():
 				break
+			if best_hand_coords.size() > 5:
+				best_hand_coords = best_hand_coords.slice(0, 5)
 				
 			var play_res := gm.play_hand(best_hand_coords)
+			if play_res.is_empty():
+				break
 			total_ante_dmg += play_res.get("damage", 0)
 			
 		if gm.boss_hp > 0:
@@ -120,7 +134,7 @@ static func _simulate_single_run(run_id: int, seed_val: int) -> Dictionary:
 			last_dmg = total_ante_dmg
 			break
 			
-		# 4. Visit Shop between Antes (Antes 1 to 7)
+		# 5. Vào Chợ mua sắm giữa các Ante (Antes 1 to 7)
 		if ante < 8:
 			_simulate_shop_phase(gm, rng)
 			
@@ -305,10 +319,10 @@ static func _deductive_solve_board(gm: GameManagerClass) -> bool:
 			if safe_avail.is_empty():
 				return false
 				
-			var best_dispell_hand := _find_best_hand(gm, safe_avail)
-			if best_dispell_hand.is_empty():
-				best_dispell_hand = safe_avail.slice(0, mini(5, safe_avail.size()))
-			gm.play_hand(best_dispell_hand)
+			safe_avail.sort_custom(func(a, b):
+				return int(gm.board_data.cells[a.x][a.y].val) < int(gm.board_data.cells[b.x][b.y].val)
+			)
+			gm.play_hand([safe_avail[0]])
 			progress = true
 		elif not progress:
 			# Kẹt không thể suy luận tiếp mà không đoán mò
@@ -316,138 +330,349 @@ static func _deductive_solve_board(gm: GameManagerClass) -> bool:
 			
 	return false
 
-static func _find_best_hand(gm: GameManagerClass, available_coords: Array[Vector2i]) -> Array[Vector2i]:
-	# Greedy search across all 1 to 5 card combinations from available coords
-	# Returns the subset of coords yielding maximum damage
-	var best_coords: Array[Vector2i] = []
-	var max_dmg := -1
-	
-	# If small pool, evaluate all combinations up to size 5
-	# If large pool, take top candidates sorted by value/suit synergy
-	var pool: Array[Vector2i] = available_coords.duplicate()
+static func _find_best_hand(gm: GameManagerClass, in_pool: Array[Vector2i]) -> Array[Vector2i]:
+	var pool := in_pool.duplicate()
 	if pool.size() > 16:
-		# Filter to prioritize highest cards or matching suits
 		pool = _filter_priority_pool(gm, pool)
-		
+	var candidates: Array[Array] = []
 	var pool_size := pool.size()
+	if pool_size == 0: return []
 	
-	# Evaluate sizes 5 down to 1
-	var target_sizes := [mini(5, pool_size), mini(4, pool_size), mini(3, pool_size), mini(2, pool_size), 1]
-	for k in target_sizes:
-		if k <= 0: continue
-		var combos := _get_combinations(pool, k, 250) # Sample up to 250 combos
+	# Group by suit
+	var by_suit := {"flame": [], "frost": [], "spark": [], "shadow": []}
+	for p in pool:
+		var s: String = gm.board_data.cells[p.x][p.y].suit
+		if by_suit.has(s):
+			by_suit[s].append(p)
+			
+	var top_val_pool: Array[Vector2i] = pool.duplicate()
+	top_val_pool.sort_custom(func(a, b): return int(gm.board_data.cells[a.x][a.y].val) > int(gm.board_data.cells[b.x][b.y].val))
+
+	var fill_to_5 := func(base_hand: Array) -> Array:
+		if base_hand.size() >= 5 or base_hand.size() >= pool_size:
+			return base_hand.slice(0, 5)
+		var filled := base_hand.duplicate()
+		if gm.owned_relics.has("relic_flame_wrath"):
+			for p in pool:
+				if not filled.has(p) and gm.board_data.cells[p.x][p.y].suit == "flame":
+					filled.append(p)
+					if filled.size() == mini(5, pool_size): return filled
+		for p in top_val_pool:
+			if not filled.has(p):
+				filled.append(p)
+				if filled.size() == mini(5, pool_size):
+					return filled
+		return filled.slice(0, 5)
+
+	for s in by_suit.keys():
+		var s_pool: Array = by_suit[s]
+		if s_pool.size() >= 5:
+			var combos := _get_sample_combos(s_pool, 5, 10)
+			candidates.append_array(combos)
+			s_pool.sort_custom(func(a, b): return int(gm.board_data.cells[a.x][a.y].val) > int(gm.board_data.cells[b.x][b.y].val))
+			candidates.append(s_pool.slice(0, 5))
+		elif s_pool.size() >= 2:
+			candidates.append(fill_to_5.call(s_pool))
+			
+	# Group by value (Pairs, 3-of-a-kind, 4-of-a-kind, Full House)
+	var by_val := {}
+	for p in pool:
+		var v: int = int(gm.board_data.cells[p.x][p.y].val)
+		if not by_val.has(v): by_val[v] = []
+		by_val[v].append(p)
+		
+	var trips: Array = []
+	var pairs: Array = []
+	for v in by_val.keys():
+		var v_list: Array = by_val[v]
+		if v_list.size() >= 4:
+			candidates.append(fill_to_5.call(v_list.slice(0, 4)))
+		if v_list.size() >= 3:
+			trips.append(v_list.slice(0, 3))
+			candidates.append(fill_to_5.call(v_list.slice(0, 3)))
+		if v_list.size() >= 2:
+			pairs.append(v_list.slice(0, 2))
+			candidates.append(fill_to_5.call(v_list.slice(0, 2)))
+			
+	# Full Houses (trip + pair)
+	if trips.size() >= 1 and pairs.size() >= 1:
+		for t in trips:
+			for pr in pairs:
+				if t[0] != pr[0]:
+					var fh = t.duplicate()
+					fh.append_array(pr)
+					candidates.append(fh)
+					break
+	if trips.size() >= 2:
+		var fh = trips[0].duplicate()
+		fh.append_array(trips[1].slice(0, 2))
+		candidates.append(fh)
+		
+	# Two pairs filled to 5
+	if pairs.size() >= 2:
+		var tp = pairs[0].duplicate()
+		tp.append_array(pairs[1])
+		candidates.append(fill_to_5.call(tp))
+		
+	# Straights: check consecutive values 5-card, 4-card, and 3-card
+	for length in [5, 4, 3]:
+		for start_val in range(1, 10 - length + 1):
+			var has_all := true
+			for v in range(start_val, start_val + length):
+				if not by_val.has(v) or by_val[v].is_empty():
+					has_all = false
+					break
+			if has_all:
+				var str_cand: Array[Vector2i] = []
+				for v in range(start_val, start_val + length):
+					str_cand.append(by_val[v][0])
+				candidates.append(fill_to_5.call(str_cand))
+
+	# Relic specific synergy candidates:
+	# 1. Fibonacci cards (1, 2, 3, 5, 8)
+	var fib_cards: Array[Vector2i] = []
+	for p in pool:
+		var v: int = int(gm.board_data.cells[p.x][p.y].val)
+		if v == 1 or v == 2 or v == 3 or v == 5 or v == 8:
+			fib_cards.append(p)
+	fib_cards.sort_custom(func(a, b): return int(gm.board_data.cells[a.x][a.y].val) > int(gm.board_data.cells[b.x][b.y].val))
+	if fib_cards.size() >= 5:
+		candidates.append(fib_cards.slice(0, 5))
+		candidates.append_array(_get_sample_combos(fib_cards, 5, 10))
+	elif fib_cards.size() >= 2:
+		candidates.append(fill_to_5.call(fib_cards))
+		
+	# 2. Odd cards
+	var odd_cards: Array[Vector2i] = []
+	for p in pool:
+		var v: int = int(gm.board_data.cells[p.x][p.y].val)
+		if v % 2 != 0: odd_cards.append(p)
+	odd_cards.sort_custom(func(a, b): return int(gm.board_data.cells[a.x][a.y].val) > int(gm.board_data.cells[b.x][b.y].val))
+	if odd_cards.size() >= 5:
+		candidates.append(odd_cards.slice(0, 5))
+		candidates.append_array(_get_sample_combos(odd_cards, 5, 10))
+	elif odd_cards.size() >= 2:
+		candidates.append(fill_to_5.call(odd_cards))
+		
+	# 3. Even cards
+	var even_cards: Array[Vector2i] = []
+	for p in pool:
+		var v: int = int(gm.board_data.cells[p.x][p.y].val)
+		if v > 0 and v % 2 == 0: even_cards.append(p)
+	even_cards.sort_custom(func(a, b): return int(gm.board_data.cells[a.x][a.y].val) > int(gm.board_data.cells[b.x][b.y].val))
+	if even_cards.size() >= 5:
+		candidates.append(even_cards.slice(0, 5))
+		candidates.append_array(_get_sample_combos(even_cards, 5, 10))
+	elif even_cards.size() >= 2:
+		candidates.append(fill_to_5.call(even_cards))
+		
+	# 4. Flame cards filled to 5
+	var flame_cards: Array = by_suit["flame"]
+	if flame_cards.size() >= 4 and pool_size >= 5:
+		var best_other := Vector2i(-1, -1)
+		var max_other_v := -1
+		for p in pool:
+			if not flame_cards.has(p):
+				var v: int = int(gm.board_data.cells[p.x][p.y].val)
+				if v > max_other_v:
+					max_other_v = v
+					best_other = p
+		if best_other.x >= 0:
+			var f5 = flame_cards.slice(0, 4)
+			f5.append(best_other)
+			candidates.append(f5)
+			
+	# Blackjack 21: search combinations that sum to 21
+	for k in range(2, mini(6, pool_size + 1)):
+		var combos := _get_sample_combos(pool, k, 15)
 		for combo in combos:
-			var cards: Array[Dictionary] = []
-			for p in combo:
-				cards.append(gm.board_data.cells[p.x][p.y])
-			var eval_res := HandEval.evaluate_hand(cards)
-			eval_res = RelicSys.apply_relic_modifiers(eval_res, cards, gm.owned_relics, {"correct_flags": gm.correct_flags})
-			var dmg: int = int(round(float(eval_res.get("total_chips", 0)) * float(eval_res.get("mult", 1.0))))
-			if dmg > max_dmg:
-				max_dmg = dmg
-				best_coords.clear()
-				for p in combo:
-					best_coords.append(p)
+			var sm := 0
+			for p in combo: sm += int(gm.board_data.cells[p.x][p.y].val)
+			if sm == 21:
+				candidates.append(combo)
 				
-	return best_coords
+	for k in range(1, mini(6, pool_size + 1)):
+		candidates.append(top_val_pool.slice(0, k))
+		
+	# Sample diverse 5-card combos
+	if pool_size >= 5:
+		candidates.append_array(_get_sample_combos(pool, 5, 25))
+			
+	# Evaluate all candidates and pick highest score
+	var best: Array[Vector2i] = []
+	var max_score := -1
+	var extra_st := {
+		"correct_flags": gm.correct_flags,
+		"keen_mult": gm.scaling_relic_state.get("keen_mult", 0.0),
+		"abacus_chips": gm.scaling_relic_state.get("abacus_chips", 0),
+		"geode_mult": gm.scaling_relic_state.get("geode_mult", 0.0)
+	}
+	
+	var eval_cards := func(coords_list: Array) -> int:
+		var c_cards: Array[Dictionary] = []
+		for p in coords_list: c_cards.append(gm.board_data.cells[p.x][p.y])
+		var ev := HandEval.evaluate_hand(c_cards)
+		ev = RelicSys.apply_relic_modifiers(ev, c_cards, gm.owned_relics, extra_st)
+		return int(round(float(ev.get("total_chips", 0)) * float(ev.get("mult", 1.0))))
+		
+	var do_lookahead := (pool_size <= 13 and gm.plays_left >= 2)
+	
+	for combo in candidates:
+		if combo.is_empty(): continue
+		if combo.size() > 5: combo = combo.slice(0, 5)
+		var dmg: int = eval_cards.call(combo)
+		var score := dmg
+		
+		if do_lookahead:
+			var rem: Array[Vector2i] = []
+			for p in pool:
+				if not combo.has(p): rem.append(p)
+			if not rem.is_empty():
+				var best_rem_dmg := 0
+				var rem_top: Array[Vector2i] = rem.duplicate()
+				rem_top.sort_custom(func(a, b): return int(gm.board_data.cells[a.x][a.y].val) > int(gm.board_data.cells[b.x][b.y].val))
+				for rk in range(1, mini(6, rem.size() + 1)):
+					var rd: int = eval_cards.call(rem_top.slice(0, rk))
+					if rd > best_rem_dmg: best_rem_dmg = rd
+				score = dmg + best_rem_dmg
+				
+		if score > max_score:
+			max_score = score
+			best.clear()
+			for p in combo:
+				best.append(p)
+			
+	return best
 
 static func _filter_priority_pool(gm: GameManagerClass, pool: Array[Vector2i]) -> Array[Vector2i]:
-	# Sort available cards by value descending, giving preference to flame cards if flame relic owned
 	var has_flame_relic := gm.owned_relics.has("relic_flame_wrath")
 	var has_frost_relic := gm.owned_relics.has("relic_frost_shield")
+	var has_fib_relic := gm.owned_relics.has("relic_fibonacci_sigil")
+	var has_even_relic := gm.owned_relics.has("relic_even_magus")
+	var has_odd_relic := gm.owned_relics.has("relic_odd_astrologer")
 	
-	pool.sort_custom(func(a: Vector2i, b: Vector2i):
+	var sorted := pool.duplicate()
+	sorted.sort_custom(func(a: Vector2i, b: Vector2i):
 		var card_a: Dictionary = gm.board_data.cells[a.x][a.y]
 		var card_b: Dictionary = gm.board_data.cells[b.x][b.y]
 		var score_a := int(card_a.get("val", 0))
 		var score_b := int(card_b.get("val", 0))
 		if has_flame_relic:
-			if card_a.get("suit", "") == "flame": score_a += 10
-			if card_b.get("suit", "") == "flame": score_b += 10
+			if card_a.get("suit", "") == "flame": score_a += 15
+			if card_b.get("suit", "") == "flame": score_b += 15
 		if has_frost_relic:
 			if card_a.get("suit", "") == "frost": score_a += 5
 			if card_b.get("suit", "") == "frost": score_b += 5
+		if has_fib_relic:
+			var va: int = card_a.get("val", 0)
+			var vb: int = card_b.get("val", 0)
+			if va == 1 or va == 2 or va == 3 or va == 5 or va == 8: score_a += 10
+			if vb == 1 or vb == 2 or vb == 3 or vb == 5 or vb == 8: score_b += 10
+		if has_even_relic:
+			if int(card_a.get("val", 0)) % 2 == 0: score_a += 6
+			if int(card_b.get("val", 0)) % 2 == 0: score_b += 6
+		if has_odd_relic:
+			if int(card_a.get("val", 0)) % 2 != 0: score_a += 6
+			if int(card_b.get("val", 0)) % 2 != 0: score_b += 6
 		return score_a > score_b
 	)
-	return pool.slice(0, 16)
+	return sorted.slice(0, 18)
 
-static func _get_combinations(arr: Array[Vector2i], k: int, max_samples: int) -> Array[Array]:
-	var results: Array[Array] = []
+static func _get_sample_combos(arr: Array, k: int, max_cnt: int) -> Array[Array]:
+	var res: Array[Array] = []
 	var n := arr.size()
-	if k > n or k <= 0:
-		return results
-	if k == 1:
-		for item in arr:
-			results.append([item])
-		return results
-		
-	# Recursive combination sampler with sample limit
-	_combine_helper(arr, k, 0, [], results, max_samples)
-	return results
-
-static func _combine_helper(arr: Array[Vector2i], k: int, start: int, current: Array[Vector2i], results: Array[Array], limit: int) -> void:
-	if results.size() >= limit:
-		return
-	if current.size() == k:
-		results.append(current.duplicate())
-		return
-	for i in range(start, arr.size()):
-		if results.size() >= limit: break
-		current.append(arr[i])
-		_combine_helper(arr, k, i + 1, current, results, limit)
-		current.pop_back()
+	if k > n or k <= 0: return res
+	var shuf := arr.duplicate()
+	for s in range(max_cnt):
+		shuf.shuffle()
+		res.append(shuf.slice(0, k))
+	return res
 
 static func _use_inventory_scrolls(gm: GameManagerClass) -> void:
-	# Transmute non-flame safe tiles into flame if owning flame wrath
-	if gm.owned_relics.has("relic_flame_wrath") and gm.owned_scrolls.has("scroll_suit_transmute"):
-		for r in range(gm.grid_size):
-			for c in range(gm.grid_size):
-				if not gm.board_data.cells[r][c].is_mine and gm.board_data.cells[r][c].suit != "flame":
-					gm.use_scroll("scroll_suit_transmute", Vector2i(r, c), "flame")
-					break
-			if not gm.owned_scrolls.has("scroll_suit_transmute"):
-				break
+	# Use scroll_restore_play immediately if owned
+	var scrolls_copy := gm.owned_scrolls.duplicate()
+	for s_id in scrolls_copy:
+		if s_id == "scroll_restore_play":
+			gm.use_scroll("scroll_restore_play")
+		elif s_id == "scroll_suit_transmute":
+			var target_suit := "flame"
+			for r in range(gm.grid_size):
+				for c in range(gm.grid_size):
+					if gm.revealed[r][c] and not gm.board_data.cells[r][c].is_mine and gm.board_data.cells[r][c].suit != target_suit:
+						gm.use_scroll("scroll_suit_transmute", Vector2i(r, c), target_suit)
+						break
+				if not gm.owned_scrolls.has("scroll_suit_transmute"): break
+		elif s_id == "scroll_value_boost":
+			for r in range(gm.grid_size):
+				for c in range(gm.grid_size):
+					if gm.revealed[r][c] and not gm.board_data.cells[r][c].is_mine:
+						gm.use_scroll("scroll_value_boost", Vector2i(r, c))
+						break
+				if not gm.owned_scrolls.has("scroll_value_boost"): break
 
 static func _simulate_shop_phase(gm: GameManagerClass, rng: RandomNumberGenerator) -> void:
-	# Priority list of relics to buy
 	var relic_priorities := [
 		"relic_flame_wrath",
+		"relic_fibonacci_sigil",
+		"relic_even_magus",
+		"relic_odd_astrologer",
+		"relic_astral_duo",
+		"relic_celestial_trio",
+		"relic_sacred_order",
+		"relic_elemental_surge",
+		"relic_burning_geode",
+		"relic_keen_eyeglass",
 		"relic_sudoku_compass",
+		"relic_blackjack",
+		"relic_sacred_abacus",
+		"relic_blast_ward",
 		"relic_mine_magnifier",
-		"relic_frost_shield",
-		"relic_blackjack"
+		"relic_frost_shield"
 	]
 	
-	# Simulate 1 to 2 shop passes with reroll if gold allows
-	for pass_num in range(2):
+	# Simulate up to 4 shop passes with reroll (reroll cost 2)
+	for pass_num in range(4):
 		var offered_relics: Array[String] = []
 		var all_relics := RelicSys.RELIC_DEFINITIONS.keys()
-		all_relics.shuffle()
+		# Deterministic shuffle using run-specific rng
+		for i in range(all_relics.size() - 1, 0, -1):
+			var j: int = rng.randi_range(0, i)
+			var tmp = all_relics[i]
+			all_relics[i] = all_relics[j]
+			all_relics[j] = tmp
 		for r_id in all_relics:
 			if not gm.owned_relics.has(r_id):
 				offered_relics.append(r_id)
 				if offered_relics.size() >= 3: break
 				
-		# Buy highest priority affordable relic
 		for pref in relic_priorities:
-			if offered_relics.has(pref) and gm.owned_relics.size() < 5:
+			if offered_relics.has(pref):
 				var cost: int = RelicSys.RELIC_DEFINITIONS[pref].cost
-				if gm.gold >= cost:
+				if gm.owned_relics.size() < 5 and gm.gold >= cost:
 					gm.buy_relic(pref)
-					break
+				elif gm.owned_relics.size() >= 5:
+					var lowest_idx := -1
+					var lowest_relic := ""
+					for o_id in gm.owned_relics:
+						var idx := relic_priorities.find(o_id)
+						if idx > lowest_idx:
+							lowest_idx = idx
+							lowest_relic = o_id
+					var pref_idx := relic_priorities.find(pref)
+					if pref_idx < lowest_idx and (gm.gold + 2) >= cost:
+						gm.owned_relics.erase(lowest_relic)
+						gm.gold += 2
+						gm.buy_relic(pref)
 					
-		# Check scrolls (tarots)
 		if gm.owned_scrolls.size() < 2:
-			var all_scrolls := ScrollSys.SCROLL_DEFINITIONS.keys()
-			all_scrolls.shuffle()
+			var all_scrolls := ["scroll_restore_play", "scroll_suit_transmute", "scroll_value_boost"]
 			for s_id in all_scrolls:
 				var s_cost: int = ScrollSys.SCROLL_DEFINITIONS[s_id].cost
-				if (s_id == "scroll_restore_play" or (s_id == "scroll_suit_transmute" and gm.owned_relics.has("relic_flame_wrath"))) and gm.gold >= s_cost + 4:
+				if gm.gold >= s_cost and not gm.owned_scrolls.has(s_id):
 					gm.buy_scroll(s_id)
-					break
+					if gm.owned_scrolls.size() >= 2: break
 					
-		# Optional reroll if we still have plenty of gold and haven't maxed relics
-		if gm.owned_relics.size() < 5 and gm.gold >= 8:
+		if gm.gold >= 4:
 			gm.gold -= 2
 		else:
 			break

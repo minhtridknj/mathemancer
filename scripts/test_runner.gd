@@ -55,7 +55,7 @@ func _ready() -> void:
 		print("  ✅ PASS 100%% Full Board Deduction confirmed: all %d boards fully resolved purely by logic (Zero Guessing)" % bench_res.total_boards)
 		
 	if bench_res.win_rate < 75.0:
-		print("❌ FAIL Auto-Play benchmark win rate below 75%: %.1f%%" % bench_res.win_rate)
+		print("❌ FAIL Auto-Play benchmark win rate below 75%%: %.1f%%" % bench_res.win_rate)
 		all_passed = false
 	else:
 		print("  ✅ PASS Auto-Play Benchmark achieved %.1f%% Win Rate (>= 75%% required)" % bench_res.win_rate)

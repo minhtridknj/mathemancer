@@ -88,10 +88,10 @@ static func run_tests() -> bool:
 	# 5. ADVANCE TO ANTE 2 WITH OWNED RELIC
 	# ==========================================
 	gm.start_ante(2, 200)
-	if gm.ante != 2 or gm.boss_hp != 600 or gm.plays_left != 4 or not gm.owned_relics.has(target_relic):
+	if gm.ante != 2 or gm.boss_hp != 420 or gm.plays_left != 4 or not gm.owned_relics.has(target_relic):
 		print("❌ FAIL [E2E] Ante 2 data inconsistency")
 		return false
-	print("  ✅ PASS [E2E] Started Ante 2 successfully (Boss HP: 600, Retained Relics: %s)" % str(gm.owned_relics))
+	print("  ✅ PASS [E2E] Started Ante 2 successfully (Boss HP: 420, Retained Relics: %s)" % str(gm.owned_relics))
 	
 	# Verify purchased relic triggers in Ante 2
 	var test_flame_card: Array[Dictionary] = [{"val": 4, "suit": "flame"}, {"val": 3, "suit": "flame"}]

@@ -10,6 +10,7 @@ const ScreenShake = preload("res://scripts/ui/screen_shake.gd")
 const GameManagerClass = preload("res://scripts/core/game_manager.gd")
 const HandEval = preload("res://scripts/core/hand_evaluator.gd")
 const Relics = preload("res://scripts/core/relic_system.gd")
+const ScrollSys = preload("res://scripts/core/scroll_system.gd")
 const FontLilita = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 
 @onready var game_manager: GameManagerClass = $GameManager
@@ -31,6 +32,7 @@ const FontLilita = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 @onready var play_button: Button = $BottomBar/VBox/HandControls/PlayButton
 @onready var tray_container: HBoxContainer = $BottomBar/VBox/TrayMargin/TrayContainer
 @onready var relics_box: HBoxContainer = $TopBar/Margin/HBox/RelicsBox
+@onready var tarots_box: HBoxContainer = $TopBar/Margin/HBox/TarotsBox
 @onready var damage_popup_label: Label = $DamagePopupLabel
 @onready var round_won_modal: PanelContainer = $RoundWonModal
 @onready var game_over_modal: PanelContainer = $GameOverModal
@@ -44,6 +46,23 @@ const FontLilita = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 @onready var relic_modal_tip: Label = $RelicDetailModal/Margin/VBox/StrategyBox/StrategyMargin/TipLabel
 @onready var relic_modal_close_top: Button = $RelicDetailModal/Margin/VBox/HeaderHBox/CloseTopBtn
 @onready var relic_modal_close_bottom: Button = $RelicDetailModal/Margin/VBox/CloseBottomBtn
+
+# Tarot / Consumable Scroll References
+@onready var tarot_action_modal: PanelContainer = $TarotActionModal
+@onready var tarot_modal_title: Label = $TarotActionModal/Margin/VBox/TitleLabel
+@onready var tarot_modal_desc: Label = $TarotActionModal/Margin/VBox/DescLabel
+@onready var tarot_modal_status: Label = $TarotActionModal/Margin/VBox/TargetBox/TargetMargin/VBox/TargetStatusLabel
+@onready var tarot_modal_suit_box: HBoxContainer = $TarotActionModal/Margin/VBox/TargetBox/TargetMargin/VBox/SuitSelectorHBox
+@onready var tarot_modal_use_btn: Button = $TarotActionModal/Margin/VBox/ActionsHBox/UseButton
+@onready var tarot_modal_cancel_btn: Button = $TarotActionModal/Margin/VBox/ActionsHBox/CancelButton
+@onready var tarot_modal_close_top: Button = $TarotActionModal/Margin/VBox/HeaderHBox/CloseTopBtn
+@onready var suit_flame_btn: Button = $TarotActionModal/Margin/VBox/TargetBox/TargetMargin/VBox/SuitSelectorHBox/SuitFlameBtn
+@onready var suit_frost_btn: Button = $TarotActionModal/Margin/VBox/TargetBox/TargetMargin/VBox/SuitSelectorHBox/SuitFrostBtn
+@onready var suit_spark_btn: Button = $TarotActionModal/Margin/VBox/TargetBox/TargetMargin/VBox/SuitSelectorHBox/SuitSparkBtn
+@onready var suit_shadow_btn: Button = $TarotActionModal/Margin/VBox/TargetBox/TargetMargin/VBox/SuitSelectorHBox/SuitShadowBtn
+
+var active_tarot_id := ""
+var selected_transmute_suit := "flame"
 
 # Preloaded Sounds
 var sound_click: AudioStream = preload("res://assets/audio/click1.wav")
@@ -98,12 +117,34 @@ func _ready() -> void:
 			sb_strat.corner_radius_bottom_right = 6
 			strat_box.add_theme_stylebox_override("panel", sb_strat)
 	
+	# Khởi tạo Tarot Action Modal
+	if tarot_action_modal:
+		tarot_action_modal.visible = false
+		if tarot_modal_close_top:
+			tarot_modal_close_top.pressed.connect(close_tarot_modal)
+		if tarot_modal_cancel_btn:
+			tarot_modal_cancel_btn.pressed.connect(close_tarot_modal)
+		if tarot_modal_use_btn:
+			tarot_modal_use_btn.pressed.connect(_on_tarot_use_pressed)
+		if suit_flame_btn:
+			suit_flame_btn.pressed.connect(func(): _select_transmute_suit("flame"))
+		if suit_frost_btn:
+			suit_frost_btn.pressed.connect(func(): _select_transmute_suit("frost"))
+		if suit_spark_btn:
+			suit_spark_btn.pressed.connect(func(): _select_transmute_suit("spark"))
+		if suit_shadow_btn:
+			suit_shadow_btn.pressed.connect(func(): _select_transmute_suit("shadow"))
+	
 	start_new_round(1)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if relic_detail_modal and relic_detail_modal.visible and event is InputEventKey:
 		if event.pressed and event.keycode == KEY_ESCAPE:
 			relic_detail_modal.visible = false
+			get_viewport().set_input_as_handled()
+	elif tarot_action_modal and tarot_action_modal.visible and event is InputEventKey:
+		if event.pressed and event.keycode == KEY_ESCAPE:
+			close_tarot_modal()
 			get_viewport().set_input_as_handled()
 
 func play_sfx(stream: AudioStream) -> void:
@@ -145,6 +186,7 @@ func _update_stats_ui() -> void:
 	ante_label.text = "ANTE: %d / 8" % game_manager.ante
 	plays_label.text = "⚔️ PLAYS: %d / %d" % [game_manager.plays_left, game_manager.max_plays]
 	_update_relics_ui()
+	_update_tarots_ui()
 
 func _update_relics_ui() -> void:
 	for child in relics_box.get_children():
@@ -313,6 +355,229 @@ func show_relic_inspection(relic_id: String) -> void:
 		relic_detail_modal.visible = true
 	play_sfx(sound_click)
 
+func _update_tarots_ui() -> void:
+	if not tarots_box:
+		return
+	for child in tarots_box.get_children():
+		tarots_box.remove_child(child)
+		child.queue_free()
+		
+	if game_manager.owned_scrolls.is_empty():
+		var placeholder := PanelContainer.new()
+		placeholder.custom_minimum_size = Vector2(130, 68)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.08, 0.12, 0.6)
+		sb.border_color = Color(0.22, 0.25, 0.35, 0.8)
+		sb.set_border_width_all(1)
+		sb.corner_radius_top_left = 8
+		sb.corner_radius_top_right = 8
+		sb.corner_radius_bottom_left = 8
+		sb.corner_radius_bottom_right = 8
+		placeholder.add_theme_stylebox_override("panel", sb)
+		
+		var vbox := VBoxContainer.new()
+		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_theme_constant_override("separation", 2)
+		placeholder.add_child(vbox)
+		
+		var icon_lbl := Label.new()
+		icon_lbl.text = "📜 TAROT (0/2)"
+		icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_lbl.add_theme_font_size_override("font_size", 11)
+		icon_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65))
+		vbox.add_child(icon_lbl)
+		
+		var sub_lbl := Label.new()
+		sub_lbl.text = "Visit Shop to Buy"
+		sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sub_lbl.add_theme_font_size_override("font_size", 10)
+		sub_lbl.add_theme_color_override("font_color", Color(0.38, 0.42, 0.52))
+		vbox.add_child(sub_lbl)
+		
+		tarots_box.add_child(placeholder)
+		return
+		
+	for scroll_id in game_manager.owned_scrolls:
+		if not ScrollSys.SCROLL_DEFINITIONS.has(scroll_id):
+			continue
+		var s_info: Dictionary = ScrollSys.SCROLL_DEFINITIONS[scroll_id]
+		var card := _create_tarot_in_match_card(scroll_id, s_info)
+		tarots_box.add_child(card)
+
+func _create_tarot_in_match_card(scroll_id: String, s_info: Dictionary) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(130, 68)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	
+	var sb_normal := StyleBoxFlat.new()
+	sb_normal.bg_color = Color("#181226")
+	sb_normal.border_color = Color("#a855f7")
+	sb_normal.set_border_width_all(2)
+	sb_normal.corner_radius_top_left = 8
+	sb_normal.corner_radius_top_right = 8
+	sb_normal.corner_radius_bottom_left = 8
+	sb_normal.corner_radius_bottom_right = 8
+	
+	var sb_hover := StyleBoxFlat.new()
+	sb_hover.bg_color = Color("#261b40")
+	sb_hover.border_color = Color("#c084fc")
+	sb_hover.set_border_width_all(3)
+	sb_hover.corner_radius_top_left = 8
+	sb_hover.corner_radius_top_right = 8
+	sb_hover.corner_radius_bottom_left = 8
+	sb_hover.corner_radius_bottom_right = 8
+	
+	card.add_theme_stylebox_override("panel", sb_normal)
+	card.tooltip_text = "[ %s ]\nType: Consumable Tarot Card (Scroll)\n\nEffect: %s\n\n👉 Click to Use / Dùng" % [
+		s_info.name,
+		s_info.desc
+	]
+	
+	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.add_theme_constant_override("margin_left", 6)
+	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	card.add_child(margin)
+	
+	var vbox := VBoxContainer.new()
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	vbox.add_theme_constant_override("separation", 2)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(vbox)
+	
+	var header := Label.new()
+	header.mouse_filter = Control.MOUSE_FILTER_PASS
+	header.text = "📜 %s" % s_info.name
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_override("font", FontLilita)
+	header.add_theme_font_size_override("font_size", 11)
+	header.add_theme_color_override("font_color", Color("#d8b4fe"))
+	vbox.add_child(header)
+	
+	var effect_lbl := Label.new()
+	effect_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+	effect_lbl.text = s_info.desc
+	effect_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	effect_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	effect_lbl.add_theme_font_size_override("font_size", 9)
+	effect_lbl.add_theme_color_override("font_color", Color("#e9d5ff"))
+	vbox.add_child(effect_lbl)
+	
+	var hint_lbl := Label.new()
+	hint_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+	hint_lbl.text = "✨ Click to Use"
+	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint_lbl.add_theme_font_size_override("font_size", 9)
+	hint_lbl.add_theme_color_override("font_color", Color(0.7, 0.6, 0.85))
+	vbox.add_child(hint_lbl)
+	
+	card.mouse_entered.connect(func():
+		card.add_theme_stylebox_override("panel", sb_hover)
+		play_sfx(sound_rollover)
+	)
+	card.mouse_exited.connect(func():
+		card.add_theme_stylebox_override("panel", sb_normal)
+	)
+	card.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			open_tarot_modal(scroll_id)
+	)
+	
+	return card
+
+func open_tarot_modal(scroll_id: String) -> void:
+	if not ScrollSys.SCROLL_DEFINITIONS.has(scroll_id):
+		return
+	active_tarot_id = scroll_id
+	var s_info: Dictionary = ScrollSys.SCROLL_DEFINITIONS[scroll_id]
+	if tarot_modal_title:
+		tarot_modal_title.text = "📜 %s" % s_info.name.to_upper()
+	if tarot_modal_desc:
+		tarot_modal_desc.text = s_info.desc
+	if tarot_modal_suit_box:
+		tarot_modal_suit_box.visible = (scroll_id == "scroll_suit_transmute")
+		
+	if tarot_action_modal:
+		tarot_action_modal.visible = true
+	_refresh_tarot_modal_target_status()
+	play_sfx(sound_click)
+
+func close_tarot_modal() -> void:
+	if tarot_action_modal:
+		tarot_action_modal.visible = false
+	active_tarot_id = ""
+
+func _select_transmute_suit(suit_name: String) -> void:
+	selected_transmute_suit = suit_name
+	play_sfx(sound_switch1)
+	_refresh_tarot_modal_target_status()
+
+func _refresh_tarot_modal_target_status() -> void:
+	if not tarot_action_modal or not tarot_action_modal.visible:
+		return
+		
+	if active_tarot_id == "scroll_suit_transmute" or active_tarot_id == "scroll_value_boost":
+		if selected_coords.size() == 1:
+			var p = selected_coords[0]
+			var cell = game_manager.board_data.cells[p.x][p.y]
+			if active_tarot_id == "scroll_suit_transmute":
+				tarot_modal_status.text = "🎯 Target: Tile at (%d, %d) [Val: %d, Suit: %s] ➔ Change to [%s]" % [
+					p.x + 1, p.y + 1, cell.val, cell.suit.capitalize(), selected_transmute_suit.capitalize()
+				]
+			else:
+				tarot_modal_status.text = "🎯 Target: Tile at (%d, %d) [Val: %d ➔ %d]" % [
+					p.x + 1, p.y + 1, cell.val, cell.val + 2
+				]
+			tarot_modal_status.add_theme_color_override("font_color", Color("#4ade80"))
+			if tarot_modal_use_btn:
+				tarot_modal_use_btn.disabled = false
+		elif selected_coords.is_empty():
+			tarot_modal_status.text = "⚠️ Please select 1 card on the board first (click tile on board)!"
+			tarot_modal_status.add_theme_color_override("font_color", Color("#fbbf24"))
+			if tarot_modal_use_btn:
+				tarot_modal_use_btn.disabled = true
+		else:
+			tarot_modal_status.text = "⚠️ Please select only 1 target card (currently %d selected)!" % selected_coords.size()
+			tarot_modal_status.add_theme_color_override("font_color", Color("#f87171"))
+			if tarot_modal_use_btn:
+				tarot_modal_use_btn.disabled = true
+	else:
+		tarot_modal_status.text = "✨ Instant effect: activates directly on your game board or resources."
+		tarot_modal_status.add_theme_color_override("font_color", Color("#a78bfa"))
+		if tarot_modal_use_btn:
+			tarot_modal_use_btn.disabled = false
+
+func _on_tarot_use_pressed() -> void:
+	if active_tarot_id == "":
+		return
+		
+	var target_coord := Vector2i(-1, -1)
+	if active_tarot_id == "scroll_suit_transmute" or active_tarot_id == "scroll_value_boost":
+		if selected_coords.size() != 1:
+			return
+		target_coord = selected_coords[0]
+		
+	var extra_arg := selected_transmute_suit if active_tarot_id == "scroll_suit_transmute" else ""
+	var success := game_manager.use_scroll(active_tarot_id, target_coord, extra_arg)
+	
+	if success:
+		play_sfx(sound_switch2)
+		if target_coord.x >= 0 and target_coord.y >= 0:
+			var cell = game_manager.board_data.cells[target_coord.x][target_coord.y]
+			tile_nodes[target_coord.x][target_coord.y].set_tile_data(cell)
+		if active_tarot_id == "scroll_mine_reveal":
+			for r in range(game_manager.grid_size):
+				for c in range(game_manager.grid_size):
+					if game_manager.flagged[r][c]:
+						tile_nodes[r][c].set_flagged(true)
+		plays_label.text = "⚔️ PLAYS: %d / %d" % [game_manager.plays_left, game_manager.max_plays]
+		_update_hand_tray()
+		_update_tarots_ui()
+		close_tarot_modal()
+
 func _build_board_ui() -> void:
 	for child in board_container.get_children():
 		child.queue_free()
@@ -466,6 +731,7 @@ func _on_tile_selected_toggled(r: int, c: int, is_selected: bool) -> void:
 		selected_coords.erase(coord)
 		play_sfx(sound_rollover)
 	_update_hand_tray()
+	_refresh_tarot_modal_target_status()
 
 func _return_card_from_tray(p: Vector2i) -> void:
 	if selected_coords.has(p):
@@ -474,6 +740,7 @@ func _return_card_from_tray(p: Vector2i) -> void:
 			tile_nodes[p.x][p.y].set_selected(false)
 		play_sfx(sound_rollover)
 		_update_hand_tray()
+		_refresh_tarot_modal_target_status()
 
 func _update_hand_tray() -> void:
 	for child in tray_container.get_children():
@@ -682,4 +949,5 @@ func _restart_run() -> void:
 	game_manager.owned_relics.clear()
 	game_manager.owned_scrolls.clear()
 	game_manager.gold = 5
+	_update_tarots_ui()
 	start_new_round(1)

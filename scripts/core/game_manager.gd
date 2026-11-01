@@ -12,6 +12,7 @@ const Scrolls = preload("res://scripts/core/scroll_system.gd")
 signal tile_revealed(r: int, c: int, cell_data: Dictionary)
 signal tile_flagged(r: int, c: int, is_flagged: bool)
 signal mine_triggered(r: int, c: int)
+signal ward_absorbed_mine(r: int, c: int)
 signal stage_dispelled(new_stage: int)
 signal play_hand_resolved(hand_result: Dictionary)
 signal boss_damaged(amount: int, current_hp: int)
@@ -30,6 +31,14 @@ var discards_left: int = 2
 var gold: int = 5
 var current_stage: int = 1
 var correct_flags: int = 0
+var mine_exploded_this_ante: bool = false
+
+var scaling_relic_state: Dictionary = {
+	"keen_mult": 0.0,
+	"abacus_chips": 0,
+	"geode_mult": 0.0,
+	"blast_ward_used": false
+}
 
 var board_data: Dictionary = {}
 var revealed: Array = []
@@ -54,18 +63,20 @@ func start_ante(ante_num: int, seed_val: int = -1) -> Dictionary:
 	else:
 		grid_size = 8
 		
-	# Máu Boss theo Ante (Ante 1: 200 HP để người chơi giải xong bàn cờ có thể hạ gục Boss)
-	var hp_table := [0, 200, 600, 1500, 3500, 7500, 15000, 30000, 60000]
+	# Máu Boss theo Ante (được cân bằng vừa phải để đảm bảo trải nghiệm người chơi đạt khoảng 80%+ tỉ lệ thắng)
+	var hp_table := [0, 200, 420, 1000, 2400, 5200, 10500, 21000, 42000]
 	if ante < hp_table.size():
 		boss_hp = hp_table[ante]
 	else:
-		boss_hp = int(60000 * pow(2, ante - 8))
+		boss_hp = int(42000 * pow(2, ante - 8))
 	max_boss_hp = boss_hp
 	
 	plays_left = max_plays
 	discards_left = 2
 	current_stage = 1
 	correct_flags = 0
+	mine_exploded_this_ante = false
+	scaling_relic_state["blast_ward_used"] = false
 	
 	# Sinh bàn cờ
 	board_data = BoardGen.generate_level(grid_size, ante, seed_val)
@@ -102,6 +113,15 @@ func click_tile(r: int, c: int) -> bool:
 	var cell: Dictionary = board_data.cells[r][c]
 	
 	if cell.is_mine:
+		if owned_relics.has("relic_blast_ward") and not scaling_relic_state.get("blast_ward_used", false):
+			scaling_relic_state["blast_ward_used"] = true
+			flagged[r][c] = true
+			correct_flags += 1
+			emit_signal("ward_absorbed_mine", r, c)
+			emit_signal("tile_flagged", r, c, true)
+			return false
+			
+		mine_exploded_this_ante = true
 		plays_left -= 1
 		emit_signal("mine_triggered", r, c)
 		emit_signal("plays_changed", plays_left)
@@ -156,8 +176,19 @@ func play_hand(selected_coords: Array[Vector2i]) -> Dictionary:
 	var eval_res: Dictionary = HandEval.evaluate_hand(cards)
 	
 	# 2. Áp dụng hiệu ứng Cổ Vật (Jokers)
-	var extra_state := {"correct_flags": correct_flags}
+	var extra_state := {
+		"correct_flags": correct_flags,
+		"keen_mult": scaling_relic_state.get("keen_mult", 0.0),
+		"abacus_chips": scaling_relic_state.get("abacus_chips", 0),
+		"geode_mult": scaling_relic_state.get("geode_mult", 0.0)
+	}
 	eval_res = Relics.apply_relic_modifiers(eval_res, cards, owned_relics, extra_state)
+	
+	# Cập nhật Bàn Tính Thần Kỳ (Sacred Abacus: +8 Chips vĩnh viễn khi đánh Blackjack 21 hoặc Straight)
+	if owned_relics.has("relic_sacred_abacus"):
+		var h_type: String = str(eval_res.get("type", ""))
+		if h_type == "BLACKJACK_21" or h_type == "STRAIGHT" or h_type == "STRAIGHT_FLUSH":
+			scaling_relic_state["abacus_chips"] = int(scaling_relic_state.get("abacus_chips", 0)) + 8
 	
 	# 3. Tính tổng sát thương Chips × Mult
 	var total_chips: int = int(eval_res.get("total_chips", 0))
@@ -176,12 +207,17 @@ func play_hand(selected_coords: Array[Vector2i]) -> Dictionary:
 	# 6. Trừ 1 lượt Play Hand & giải trừ sương mù tầng tiếp theo
 	plays_left -= 1
 	current_stage += 1
+	if owned_relics.has("relic_burning_geode"):
+		scaling_relic_state["geode_mult"] = float(scaling_relic_state.get("geode_mult", 0.0)) + 1.5
+		
 	emit_signal("plays_changed", plays_left)
 	emit_signal("stage_dispelled", current_stage)
 	emit_signal("play_hand_resolved", eval_res)
 	
 	# 7. Kiểm tra Thắng / Thua
 	if boss_hp <= 0:
+		if owned_relics.has("relic_keen_eyeglass") and not mine_exploded_this_ante:
+			scaling_relic_state["keen_mult"] = float(scaling_relic_state.get("keen_mult", 0.0)) + 3.0
 		var reward := 5 + plays_left * 2
 		gold += reward
 		emit_signal("gold_changed", gold)

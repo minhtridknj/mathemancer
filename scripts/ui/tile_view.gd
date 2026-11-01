@@ -55,6 +55,14 @@ func setup(r: int, c: int, p_cell_data: Dictionary, p_revealed: bool, p_flagged:
 	is_selected = false
 	_update_visuals()
 
+func set_tile_data(p_cell_data: Dictionary) -> void:
+	cell_data = p_cell_data
+	_update_visuals()
+
+func update_cell_data(p_cell_data: Dictionary) -> void:
+	cell_data = p_cell_data
+	_update_visuals()
+
 func _on_gui_input(event: InputEvent) -> void:
 	if is_exhausted:
 		return
