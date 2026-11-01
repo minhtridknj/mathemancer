@@ -90,7 +90,7 @@ text = "ANTE 1: ARITHMETIC IMP - NUMERIS"
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 step = 1.0
-value = 600.0
+value = 200.0
 show_percentage = false
 
 [node name="HpLabel" type="Label" parent="TopBar/Margin/HBox/BossPanel/HpBar"]
@@ -102,7 +102,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_fonts/font = ExtResource("5_font_lilita")
 theme_override_font_sizes/font_size = 14
-text = "600 / 600 HP"
+text = "200 / 200 HP"
 horizontal_alignment = 1
 vertical_alignment = 1
 

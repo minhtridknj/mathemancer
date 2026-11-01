@@ -20,7 +20,7 @@ static func run_tests() -> bool:
 	gm.start_ante(1, 100) # Fixed seed 100 for deterministic testing
 	print("  [E2E] Initialized Ante 1 (Boss HP: %d, Grid: %dx%d, Plays: %d)" % [gm.boss_hp, gm.grid_size, gm.grid_size, gm.plays_left])
 	
-	if gm.boss_hp != 600 or gm.grid_size != 4 or gm.plays_left != 4:
+	if gm.boss_hp != 200 or gm.grid_size != 4 or gm.plays_left != 4:
 		print("❌ FAIL [E2E] Invalid Ante 1 initial stats")
 		return false
 	print("  ✅ PASS [E2E] Ante 1 initialized correctly")
@@ -88,10 +88,10 @@ static func run_tests() -> bool:
 	# 5. ADVANCE TO ANTE 2 WITH OWNED RELIC
 	# ==========================================
 	gm.start_ante(2, 200)
-	if gm.ante != 2 or gm.boss_hp != 1200 or gm.plays_left != 4 or not gm.owned_relics.has(target_relic):
+	if gm.ante != 2 or gm.boss_hp != 600 or gm.plays_left != 4 or not gm.owned_relics.has(target_relic):
 		print("❌ FAIL [E2E] Ante 2 data inconsistency")
 		return false
-	print("  ✅ PASS [E2E] Started Ante 2 successfully (Boss HP: 1200, Retained Relics: %s)" % str(gm.owned_relics))
+	print("  ✅ PASS [E2E] Started Ante 2 successfully (Boss HP: 600, Retained Relics: %s)" % str(gm.owned_relics))
 	
 	# Verify purchased relic triggers in Ante 2
 	var test_flame_card: Array[Dictionary] = [{"val": 4, "suit": "flame"}, {"val": 3, "suit": "flame"}]

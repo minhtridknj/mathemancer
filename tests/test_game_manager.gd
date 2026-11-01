@@ -11,7 +11,7 @@ static func run_tests() -> bool:
 	gm.start_ante(1, 42) # fixed seed
 	
 	# 1. Check Ante 1 initial values
-	if gm.boss_hp < 600 or gm.plays_left != 4:
+	if gm.boss_hp < 200 or gm.plays_left != 4:
 		print("❌ FAIL initial values: boss_hp=%d, plays_left=%d" % [gm.boss_hp, gm.plays_left])
 		all_ok = false
 	else:

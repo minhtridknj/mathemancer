@@ -105,7 +105,7 @@ Người chơi trải qua 5 Tầng thử thách (Mỗi tầng gồm 2 Màn Thư�
 
 | Tầng (Ante) | Kích Thước Bàn Cờ | Số Rank Mìn | Số Chặng Sương Mù | Máu Boss Mục Tiêu | Đặc Điểm Thử Thách |
 | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Ante 1** | **4×4** | 2 Ranks (Rank 1–2) | 2 Chặng | **600 – 800 HP** | Làm quen cơ chế mỏ neo và tính chất |
+| **Ante 1** | **4×4** | 2 Ranks (Rank 1–2) | 2 Chặng | **200 – 300 HP** | Làm quen cơ chế mỏ neo và tính chất |
 | **Ante 2** | **5×5** | 3 Ranks (Rank 1–3) | 2 Chặng | **1,500 – 2,200 HP** | Xuất hiện thêm số 5, 6; đan xen Kakuro phức tạp |
 | **Ante 3** | **6×6** | 3–4 Ranks | 3 Chặng | **4,500 – 6,500 HP** | Boss có hiệu ứng làm mờ 1 Cột ngẫu nhiên |
 | **Ante 4** | **7×7** | 4 Ranks | 3 Chặng | **14,000 – 20,000 HP** | Đòi hỏi build Cổ Vật nhân Mult mạnh mới đủ điểm |

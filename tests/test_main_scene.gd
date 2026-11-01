@@ -27,11 +27,11 @@ static func run_tests(parent_node: Node) -> bool:
 	print("  ✅ PASS 4x4 Grid UI correctly populated with TileView instances")
 	
 	# 2. Check Boss initial HP
-	if main.boss_hp_bar.value != 600:
-		print("❌ FAIL boss hp bar not 600: %f" % main.boss_hp_bar.value)
+	if main.boss_hp_bar.value != 200:
+		print("❌ FAIL boss hp bar not 200: %f" % main.boss_hp_bar.value)
 		main.queue_free()
 		return false
-	print("  ✅ PASS Boss HP Bar matches 600 HP")
+	print("  ✅ PASS Boss HP Bar matches 200 HP")
 	
 	# 3. Check 5 card slots in hand tray
 	if main.tray_container.get_child_count() != 5:

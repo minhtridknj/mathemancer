@@ -22,8 +22,8 @@ signal plays_changed(new_plays: int)
 
 var ante: int = 1
 var grid_size: int = 4
-var boss_hp: int = 600
-var max_boss_hp: int = 600
+var boss_hp: int = 200
+var max_boss_hp: int = 200
 var plays_left: int = 4
 var max_plays: int = 4
 var discards_left: int = 2
@@ -54,12 +54,12 @@ func start_ante(ante_num: int, seed_val: int = -1) -> Dictionary:
 	else:
 		grid_size = 8
 		
-	# Máu Boss theo Ante
-	var hp_table := [0, 600, 1200, 2500, 5000, 10000, 20000, 40000, 80000]
+	# Máu Boss theo Ante (Ante 1: 200 HP để người chơi giải xong bàn cờ có thể hạ gục Boss)
+	var hp_table := [0, 200, 600, 1500, 3500, 7500, 15000, 30000, 60000]
 	if ante < hp_table.size():
 		boss_hp = hp_table[ante]
 	else:
-		boss_hp = int(80000 * pow(2, ante - 8))
+		boss_hp = int(60000 * pow(2, ante - 8))
 	max_boss_hp = boss_hp
 	
 	plays_left = max_plays
