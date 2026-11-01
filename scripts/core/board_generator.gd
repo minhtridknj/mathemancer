@@ -64,21 +64,21 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		cells.append(row)
 
 	# 3. Gieo mìn dựa theo Ante và Grid Size
-	# Cho phép rải mìn tự do trên mọi hàng/cột (kể cả Hàng 0).
+	# Cho phép rải mìn tự do trên mọi hàng/cột (kể cả Hàng 0) ngay từ Ante 1.
 	# Thiết lập các cấu trúc phân bổ ngẫu nhiên để:
 	# - Rank 1 có thể có 0 mìn HOẶC >= 1 mìn (người chơi tự suy luận).
 	# - Khoảng cách chênh lệch mìn giữa các rank là ngẫu nhiên (1, 2, 3... quả mìn).
 	var target_mines := 3
-	if grid_size == 4: target_mines = 3 if ante == 1 else rng.randi_range(3, 4)
+	if grid_size == 4: target_mines = rng.randi_range(3, 4)
 	elif grid_size == 5: target_mines = rng.randi_range(5, 6)
 	elif grid_size == 6: target_mines = rng.randi_range(7, 9)
 	else: target_mines = int(grid_size * 1.5)
 	
-	# Chọn ngẫu nhiên chiến lược gieo mìn:
+	# Chọn ngẫu nhiên chiến lược gieo mìn ngay từ Ante 1:
 	# Mode 0: Gapped pattern (tạo khoảng cách chênh lệch 2-3 quả mìn giữa các rank)
 	# Mode 1: Non-zero min rank (mọi hàng/cột đều có ít nhất 1 mìn -> Rank 1 có >= 1 mìn)
 	# Mode 2: Phân bổ ngẫu nhiên tự do trên toàn bộ lưới
-	var mode := rng.randi_range(1, 2) if ante == 1 else rng.randi_range(0, 2)
+	var mode := rng.randi_range(0, 2)
 	
 	if mode == 0 and grid_size >= 4:
 		# Gieo mìn tại giao điểm các hàng & cột được chọn để tạo bước nhảy rank (ví dụ {0, 2} hoặc {0, 3})
@@ -99,14 +99,19 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		col_perm.shuffle()
 		for r in range(grid_size):
 			cells[r][col_perm[r]].is_mine = true
-		if ante >= 2 and rng.randf() < 0.5:
-			var avail: Array[Vector2i] = []
-			for r in range(grid_size):
-				for c in range(grid_size):
-					if not cells[r][c].is_mine: avail.append(Vector2i(r, c))
-			if not avail.is_empty():
-				var extra_p := avail[rng.randi_range(0, avail.size() - 1)]
-				cells[extra_p.x][extra_p.y].is_mine = true
+		# Thêm ít nhất 1 mìn phụ để luôn có tối thiểu 2 Ranks khác nhau (ví dụ {1, 2} hoặc {1, 3})
+		var avail: Array[Vector2i] = []
+		for r in range(grid_size):
+			for c in range(grid_size):
+				if not cells[r][c].is_mine: avail.append(Vector2i(r, c))
+		if not avail.is_empty():
+			var extra_p := avail[rng.randi_range(0, avail.size() - 1)]
+			cells[extra_p.x][extra_p.y].is_mine = true
+			if ante >= 2 and rng.randf() < 0.4:
+				avail.erase(extra_p)
+				if not avail.is_empty():
+					var extra2 := avail[rng.randi_range(0, avail.size() - 1)]
+					cells[extra2.x][extra2.y].is_mine = true
 	else:
 		# Rải mìn tự do ngẫu nhiên trên toàn bộ bàn cờ (kể cả Hàng 0)
 		var placed_mines := 0
