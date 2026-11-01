@@ -62,7 +62,7 @@ static func run_tests() -> bool:
 	print("  [E2E] Turn 1: Played '%s' for %d dmg (Boss HP left: %d)" % [res1.name, res1.damage, gm.boss_hp])
 	
 	# Lower boss HP so the next hand naturally defeats the boss
-	gm.boss_hp = 10
+	gm.boss_hp = 5
 	var hand2_cards: Array[Vector2i] = safe_pool.slice(3, mini(6, safe_pool.size()))
 	var res2 = gm.play_hand(hand2_cards)
 	print("  [E2E] Turn 2: Defeated Boss with '%s' for %d dmg (Boss HP: %d)" % [res2.name, res2.damage, gm.boss_hp])

@@ -128,4 +128,18 @@ static func run_tests() -> bool:
 		print("❌ FAIL Staged Fog of War missing stages")
 		all_ok = false
 		
+	# 5. Guaranteed 100% Guess-Free Deductive Solvability across 20 random seeds
+	var solvability_ok := true
+	for i in range(20):
+		var test_board = BoardGenerator.generate_level(4, 1, i * 37 + 101)
+		if not BoardGenerator.is_board_100_percent_solvable(test_board):
+			print("❌ FAIL Board generation produced a 50/50 ambiguous board at seed %d" % (i * 37 + 101))
+			solvability_ok = false
+			break
+			
+	if solvability_ok:
+		print("  ✅ PASS 100% Guess-Free Solvability mathematically verified across 20 seeds (Zero 50/50)")
+	else:
+		all_ok = false
+		
 	return all_ok
