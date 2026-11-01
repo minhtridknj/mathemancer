@@ -1,0 +1,337 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud_script"]
+[ext_resource type="Script" path="res://scripts/core/game_manager.gd" id="2_gm_script"]
+[ext_resource type="Script" path="res://scripts/ui/screen_shake.gd" id="3_shake_script"]
+[ext_resource type="PackedScene" path="res://scenes/components/shop.tscn" id="4_shop_scene"]
+[ext_resource type="FontFile" uid="uid://dmbhjbhlv1sdy" path="res://assets/fonts/LilitaOne-Regular.ttf" id="5_font_lilita"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
+bg_color = Color(0.0666667, 0.0784314, 0.117647, 0.9)
+border_width_bottom = 2
+border_color = Color(0.184314, 0.215686, 0.313726, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bottombar"]
+bg_color = Color(0.0666667, 0.0784314, 0.117647, 0.95)
+border_width_top = 2
+border_color = Color(0.184314, 0.215686, 0.313726, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_modal"]
+bg_color = Color(0.0901961, 0.109804, 0.164706, 0.98)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.898039, 0.721569, 0.231373, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_hud_script")
+
+[node name="GameManager" type="Node" parent="."]
+script = ExtResource("2_gm_script")
+
+[node name="ScreenShake" type="Node" parent="." node_paths=PackedStringArray("target_node")]
+script = ExtResource("3_shake_script")
+target_node = NodePath("../CenterArea")
+
+[node name="SFXPlayer" type="AudioStreamPlayer" parent="."]
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0431373, 0.0509804, 0.0784314, 1)
+
+[node name="TopBar" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 80.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_topbar")
+
+[node name="Margin" type="MarginContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 8
+
+[node name="HBox" type="HBoxContainer" parent="TopBar/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="BossPanel" type="VBoxContainer" parent="TopBar/Margin/HBox"]
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+
+[node name="BossTitle" type="Label" parent="TopBar/Margin/HBox/BossPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.301961, 0.301961, 1)
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 18
+text = "ANTE 1: ARITHMETIC IMP - NUMERIS"
+
+[node name="HpBar" type="ProgressBar" parent="TopBar/Margin/HBox/BossPanel"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+step = 1.0
+value = 600.0
+show_percentage = false
+
+[node name="HpLabel" type="Label" parent="TopBar/Margin/HBox/BossPanel/HpBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 14
+text = "600 / 600 HP"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PlayerStats" type="VBoxContainer" parent="TopBar/Margin/HBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="AnteLabel" type="Label" parent="TopBar/Margin/HBox/PlayerStats"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "ANTE: 1 / 8"
+
+[node name="GoldLabel" type="Label" parent="TopBar/Margin/HBox/PlayerStats"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.823529, 0.301961, 1)
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 16
+text = "🪙 5 GOLD"
+
+[node name="RelicsBox" type="HBoxContainer" parent="TopBar/Margin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+alignment = 2
+
+[node name="CenterArea" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 84.0
+offset_bottom = -168.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BoardWrapper" type="HBoxContainer" parent="CenterArea"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = -200.0
+offset_right = 240.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="RowClues" type="VBoxContainer" parent="CenterArea/BoardWrapper"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="BoardMargin" type="VBoxContainer" parent="CenterArea/BoardWrapper"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="ColClues" type="HBoxContainer" parent="CenterArea/BoardWrapper/BoardMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="BoardGrid" type="GridContainer" parent="CenterArea/BoardWrapper/BoardMargin"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="BottomBar" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -160.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_bottombar")
+
+[node name="VBox" type="VBoxContainer" parent="BottomBar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TrayMargin" type="MarginContainer" parent="BottomBar/VBox"]
+layout_mode = 2
+theme_override_constants/margin_top = 8
+
+[node name="TrayContainer" type="HBoxContainer" parent="BottomBar/VBox/TrayMargin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="HandControls" type="HBoxContainer" parent="BottomBar/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="PlaysLabel" type="Label" parent="BottomBar/VBox/HandControls"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.823529, 0.301961, 1)
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 18
+text = "⚔️ PLAYS: 4 / 4"
+
+[node name="HandPreviewLabel" type="Label" parent="BottomBar/VBox/HandControls"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Select up to 5 revealed tiles"
+
+[node name="DamagePreviewLabel" type="Label" parent="BottomBar/VBox/HandControls"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.301961, 0.823529, 1, 1)
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 18
+text = "0 Chips × 0 Mult = 0 Damage"
+
+[node name="PlayButton" type="Button" parent="BottomBar/VBox/HandControls"]
+custom_minimum_size = Vector2(160, 44)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 18
+text = "⚔️ PLAY HAND"
+
+[node name="DamagePopupLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -100.0
+offset_top = 100.0
+offset_right = 100.0
+offset_bottom = 140.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 32
+text = "-450 HP!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RoundWonModal" type="PanelContainer" parent="."]
+visible = false
+custom_minimum_size = Vector2(400, 220)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -110.0
+offset_right = 200.0
+offset_bottom = 110.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_modal")
+
+[node name="VBox" type="VBoxContainer" parent="RoundWonModal"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="RoundWonModal/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.898039, 0.721569, 0.231373, 1)
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 24
+text = "🎉 ANTE CLEARED!"
+horizontal_alignment = 1
+
+[node name="MsgLabel" type="Label" parent="RoundWonModal/VBox"]
+layout_mode = 2
+text = "Current Ante Boss defeated!
+Reward: +13 Gold"
+horizontal_alignment = 1
+
+[node name="ShopButton" type="Button" parent="RoundWonModal/VBox"]
+custom_minimum_size = Vector2(180, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "✨ VISIT SHOP"
+
+[node name="GameOverModal" type="PanelContainer" parent="."]
+visible = false
+custom_minimum_size = Vector2(400, 200)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -100.0
+offset_right = 200.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_modal")
+
+[node name="VBox" type="VBoxContainer" parent="GameOverModal"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="GameOverModal/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
+theme_override_fonts/font = ExtResource("5_font_lilita")
+theme_override_font_sizes/font_size = 26
+text = "💀 GAME OVER"
+horizontal_alignment = 1
+
+[node name="MsgLabel" type="Label" parent="GameOverModal/VBox"]
+layout_mode = 2
+text = "You ran out of plays before defeating the Boss."
+horizontal_alignment = 1
+
+[node name="RetryButton" type="Button" parent="GameOverModal/VBox"]
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "🔄 RETRY FROM ANTE 1"
+
+[node name="ShopOverlay" parent="." instance=ExtResource("4_shop_scene")]
+visible = false
+layout_mode = 1

@@ -1,0 +1,6 @@
+# Godot 4 Engine Git Ignore
+.godot/
+*.translation
+*.tmp
+*.log
+screenshot*.png

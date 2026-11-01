@@ -1,0 +1,123 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/shop_view.gd" id="1_shop_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_modal"]
+bg_color = Color(0.0784314, 0.0901961, 0.137255, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.898039, 0.721569, 0.231373, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+
+[node name="Shop" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_shop_script")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.65)
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(720, 520)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_top = -260.0
+offset_right = 360.0
+offset_bottom = 260.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_modal")
+
+[node name="VBox" type="VBoxContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="PanelContainer/VBox"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+text = "✨ MATHEMANCER BAZAAR"
+vertical_alignment = 1
+
+[node name="GoldLabel" type="Label" parent="PanelContainer/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.823529, 0.301961, 1)
+theme_override_font_sizes/font_size = 18
+text = "🪙 5 GOLD"
+vertical_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/VBox"]
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="PanelContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="RelicsSection" type="VBoxContainer" parent="PanelContainer/VBox/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Label" type="Label" parent="PanelContainer/VBox/Content/RelicsSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.898039, 0.721569, 0.231373, 1)
+text = "PASSIVE RELICS (JOKERS - MAX 5)"
+
+[node name="RelicsContainer" type="HBoxContainer" parent="PanelContainer/VBox/Content/RelicsSection"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="ScrollsSection" type="VBoxContainer" parent="PanelContainer/VBox/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/VBox/Content/ScrollsSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.301961, 0.823529, 1, 1)
+text = "SPELL SCROLLS (TAROTS - MAX 2)"
+
+[node name="ScrollsContainer" type="HBoxContainer" parent="PanelContainer/VBox/Content/ScrollsSection"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/VBox"]
+layout_mode = 2
+
+[node name="Footer" type="HBoxContainer" parent="PanelContainer/VBox"]
+layout_mode = 2
+alignment = 2
+
+[node name="RerollButton" type="Button" parent="PanelContainer/VBox/Footer"]
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+text = "🎲 REROLL (2 GOLD)"
+
+[node name="NextButton" type="Button" parent="PanelContainer/VBox/Footer"]
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+text = "⚔️ NEXT ANTE"
