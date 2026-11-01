@@ -176,11 +176,64 @@ static func run_tests() -> bool:
 	if observed_rank1_zero and observed_rank1_positive:
 		print("  ✅ PASS Dynamic Rank 1 confirmed: Rank 1 can have 0 mines or >= 1 mines depending on the board")
 	else:
-		print("⚠️ Note: Dynamic Rank 1 distribution: zero=%s, positive=%s" % [str(observed_rank1_zero), str(observed_rank1_positive)])
+		print("❌ FAIL Dynamic Rank 1 distribution: zero=%s, positive=%s" % [str(observed_rank1_zero), str(observed_rank1_positive)])
+		all_ok = false
 		
 	if observed_gap_greater_than_one:
 		print("  ✅ PASS Unpredictable Mine Gaps confirmed: Ranks can differ by more than 1 mine")
 	else:
-		print("⚠️ Note: Observed gaps between ranks")
+		print("❌ FAIL Unpredictable Mine Gaps not observed")
+		all_ok = false
+
+	# 6. Deep Verification Across All Higher Antes (Ante 2 to Ante 8)
+	var ante_grid_map := {2: 4, 3: 5, 4: 5, 5: 6, 6: 6, 7: 7, 8: 8}
+	for test_ante in ante_grid_map.keys():
+		var sz: int = ante_grid_map[test_ante]
+		var ante_r1_zero := false
+		var ante_r1_pos := false
+		var ante_gap_gt1 := false
+		var single_rank_found := false
+		
+		for seed_i in range(15):
+			var b = BoardGenerator.generate_level(sz, test_ante, test_ante * 1000 + seed_i * 29)
+			if not BoardGenerator.is_board_100_percent_solvable(b):
+				print("❌ FAIL Board generation unsolvable at Ante %d seed %d" % [test_ante, seed_i])
+				all_ok = false
+				break
+				
+			var b_mines: Array[int] = []
+			for r in range(sz):
+				var m := 0
+				for c in range(sz):
+					if b.cells[r][c].is_mine: m += 1
+				b_mines.append(m)
+			for c in range(sz):
+				var m := 0
+				for r in range(sz):
+					if b.cells[r][c].is_mine: m += 1
+				b_mines.append(m)
+			var u_m: Array[int] = []
+			for m in b_mines:
+				if not u_m.has(m): u_m.append(m)
+			u_m.sort()
+			
+			if u_m.size() == 1: single_rank_found = true
+			if u_m[0] == 0: ante_r1_zero = true
+			else: ante_r1_pos = true
+			for idx in range(u_m.size() - 1):
+				if u_m[idx + 1] - u_m[idx] > 1: ante_gap_gt1 = true
+				
+		if single_rank_found:
+			print("❌ FAIL Ante %d produced a single-rank board!" % test_ante)
+			all_ok = false
+		if not ante_r1_zero or not ante_r1_pos:
+			print("❌ FAIL Ante %d has predictable Rank 1 (zero=%s, pos=%s)" % [test_ante, str(ante_r1_zero), str(ante_r1_pos)])
+			all_ok = false
+		if not ante_gap_gt1:
+			print("❌ FAIL Ante %d has strictly gap=1 ranks" % test_ante)
+			all_ok = false
+			
+	if all_ok:
+		print("  ✅ PASS All Antes (Ante 1 to 8) verified for dynamic Rank 1, unpredictable gaps, and 100% deductive solvability!")
 
 	return all_ok

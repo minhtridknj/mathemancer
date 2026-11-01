@@ -68,69 +68,141 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 	# Thiết lập các cấu trúc phân bổ ngẫu nhiên để:
 	# - Rank 1 có thể có 0 mìn HOẶC >= 1 mìn (người chơi tự suy luận).
 	# - Khoảng cách chênh lệch mìn giữa các rank là ngẫu nhiên (1, 2, 3... quả mìn).
-	var target_mines := 3
-	if grid_size == 4: target_mines = rng.randi_range(3, 4)
-	elif grid_size == 5: target_mines = rng.randi_range(5, 6)
-	elif grid_size == 6: target_mines = rng.randi_range(7, 9)
-	else: target_mines = int(grid_size * 1.5)
-	
-	# Chọn ngẫu nhiên chiến lược gieo mìn ngay từ Ante 1:
-	# Mode 0: Gapped pattern (tạo khoảng cách chênh lệch 2-3 quả mìn giữa các rank)
-	# Mode 1: Non-zero min rank (mọi hàng/cột đều có ít nhất 1 mìn -> Rank 1 có >= 1 mìn)
-	# Mode 2: Phân bổ ngẫu nhiên tự do trên toàn bộ lưới
-	var mode := rng.randi_range(0, 2)
-	
-	if mode == 0 and grid_size >= 4:
-		# Gieo mìn tại giao điểm các hàng & cột được chọn để tạo bước nhảy rank (ví dụ {0, 2} hoặc {0, 3})
-		var k := rng.randi_range(2, mini(3, grid_size - 1))
-		var all_indices: Array[int] = []
-		for i in range(grid_size): all_indices.append(i)
-		all_indices.shuffle()
-		var chosen_rows := all_indices.slice(0, k)
-		all_indices.shuffle()
-		var chosen_cols := all_indices.slice(0, k)
-		for r in chosen_rows:
-			for c in chosen_cols:
-				cells[r][c].is_mine = true
-	elif mode == 1:
-		# Đảm bảo mọi hàng và cột đều có mìn -> Rank 1 xuất phát từ >= 1 mìn
-		var col_perm: Array[int] = []
-		for i in range(grid_size): col_perm.append(i)
-		col_perm.shuffle()
-		for r in range(grid_size):
-			cells[r][col_perm[r]].is_mine = true
-		# Thêm ít nhất 1 mìn phụ để luôn có tối thiểu 2 Ranks khác nhau (ví dụ {1, 2} hoặc {1, 3})
-		var avail: Array[Vector2i] = []
-		for r in range(grid_size):
-			for c in range(grid_size):
-				if not cells[r][c].is_mine: avail.append(Vector2i(r, c))
-		if not avail.is_empty():
-			var extra_p := avail[rng.randi_range(0, avail.size() - 1)]
-			cells[extra_p.x][extra_p.y].is_mine = true
-			if ante >= 2 and rng.randf() < 0.4:
-				avail.erase(extra_p)
-				if not avail.is_empty():
-					var extra2 := avail[rng.randi_range(0, avail.size() - 1)]
-					cells[extra2.x][extra2.y].is_mine = true
+	# 3. Gieo mìn dựa theo Ante và Grid Size
+	# Thiết lập các cấu trúc phân bổ ngẫu nhiên để:
+	# - Rank 1 có thể có 0 mìn HOẶC >= 1 mìn (người chơi tự suy luận, không đoán trước được ở mọi Ante).
+	# - Khoảng cách chênh lệch mìn giữa các rank là ngẫu nhiên (1, 2, 3... quả mìn).
+	# - Loại bỏ triệt để mọi tình trạng mặc định (default 0 mìn hoặc default chỉ chênh 1 mìn) trên tất cả các Ante.
+	var min_mine_rank := 0
+	var r_roll := rng.randf()
+	if grid_size <= 4:
+		if r_roll < 0.45: min_mine_rank = 1
+	elif grid_size <= 5:
+		if r_roll < 0.50: min_mine_rank = 1
+	elif grid_size <= 6:
+		if r_roll < 0.45: min_mine_rank = 1
+		elif r_roll < 0.55: min_mine_rank = 2
 	else:
-		# Rải mìn tự do ngẫu nhiên trên toàn bộ bàn cờ (kể cả Hàng 0)
-		var placed_mines := 0
-		var attempts := 0
-		while placed_mines < target_mines and attempts < 100:
-			attempts += 1
-			var mr := rng.randi_range(0, grid_size - 1)
-			var mc := rng.randi_range(0, grid_size - 1)
-			if not cells[mr][mc].is_mine:
-				var r_mines := 0
-				for c in range(grid_size):
-					if cells[mr][c].is_mine: r_mines += 1
-				var c_mines := 0
-				for r in range(grid_size):
-					if cells[r][mc].is_mine: c_mines += 1
-					
-				if r_mines < grid_size - 1 and c_mines < grid_size - 1:
-					cells[mr][mc].is_mine = true
-					placed_mines += 1
+		if r_roll < 0.45: min_mine_rank = 1
+		elif r_roll < 0.60: min_mine_rank = 2
+
+	# Nếu min_mine_rank >= 1: gieo hoán vị đầy đủ để mọi hàng/cột đều có ít nhất min_mine_rank quả mìn
+	if min_mine_rank >= 1:
+		var perm: Array[int] = []
+		for i in range(grid_size): perm.append(i)
+		perm.shuffle()
+		for r in range(grid_size):
+			cells[r][perm[r]].is_mine = true
+			
+		if min_mine_rank >= 2:
+			var shift := rng.randi_range(1, grid_size - 1)
+			for r in range(grid_size):
+				var c := (perm[r] + shift) % grid_size
+				cells[r][c].is_mine = true
+
+	# Danh sách hàng và cột khả dụng cho việc gieo các cấu trúc chênh lệch rank
+	var avail_r: Array[int] = []
+	var avail_c: Array[int] = []
+	for i in range(grid_size):
+		avail_r.append(i)
+		avail_c.append(i)
+	avail_r.shuffle()
+	avail_c.shuffle()
+
+	# Nếu min_mine_rank == 0: BẢO LƯU ít nhất 1 hàng và 1 cột không có mìn để đảm bảo Rank 1 bắt đầu từ 0
+	var reserved_r := -1
+	var reserved_c := -1
+	if min_mine_rank == 0:
+		reserved_r = avail_r.pop_back()
+		reserved_c = avail_c.pop_back()
+
+	# Các chiến lược tạo bước nhảy rank ngẫu nhiên (gaps >= 1, 2, 3...)
+	# Chiến lược 0: Khối giao điểm k x k (tạo bước nhảy gap = k mìn)
+	# Chiến lược 1: Bó mìn theo hàng/cột (tạo bước nhảy 2-3 mìn trên cùng 1 đường)
+	# Chiến lược 2: Cụm bậc thang phân tầng (tạo nhiều rank phân cách)
+	var strat := rng.randi_range(0, 2)
+	
+	if strat == 0:
+		var k := rng.randi_range(2, mini(3, mini(avail_r.size(), avail_c.size())))
+		var sel_r := avail_r.slice(0, k)
+		var sel_c := avail_c.slice(0, k)
+		for r in sel_r:
+			for c in sel_c:
+				cells[r][c].is_mine = true
+	elif strat == 1:
+		var num_bundles := rng.randi_range(1, 2)
+		for _b in range(num_bundles):
+			if avail_r.is_empty(): break
+			var br: int = avail_r[rng.randi_range(0, avail_r.size() - 1)]
+			var bundle_len := rng.randi_range(2, 3)
+			var valid_cols: Array[int] = []
+			for c in avail_c:
+				if not cells[br][c].is_mine: valid_cols.append(c)
+			valid_cols.shuffle()
+			for i in range(mini(bundle_len, valid_cols.size())):
+				cells[br][valid_cols[i]].is_mine = true
+	else:
+		if avail_r.size() >= 2 and avail_c.size() >= 2:
+			var sel_r := avail_r.slice(0, 2)
+			var sel_c := avail_c.slice(0, 2)
+			for r in sel_r:
+				for c in sel_c:
+					cells[r][c].is_mine = true
+			if grid_size >= 6 and rng.randf() < 0.5:
+				var rem_r := avail_r.slice(2)
+				var rem_c := avail_c.slice(2)
+				if rem_r.size() >= 2 and rem_c.size() >= 2:
+					for r in rem_r.slice(0, 2):
+						for c in rem_c.slice(0, 2):
+							cells[r][c].is_mine = true
+
+	# Bổ sung số lượng mìn tối thiểu theo kích thước bàn cờ (tránh quá ít mìn)
+	var target_min_mines := 3 if grid_size == 4 else (4 if grid_size == 5 else (6 if grid_size == 6 else (8 if grid_size == 7 else 10)))
+	var cur_m := 0
+	for r in range(grid_size):
+		for c in range(grid_size):
+			if cells[r][c].is_mine: cur_m += 1
+	while cur_m < target_min_mines:
+		var cand_cells: Array[Vector2i] = []
+		for r in range(grid_size):
+			if r == reserved_r: continue
+			for c in range(grid_size):
+				if c == reserved_c: continue
+				if not cells[r][c].is_mine: cand_cells.append(Vector2i(r, c))
+		if cand_cells.is_empty(): break
+		var p: Vector2i = cand_cells[rng.randi_range(0, cand_cells.size() - 1)]
+		cells[p.x][p.y].is_mine = true
+		cur_m += 1
+
+	# Đảm bảo luôn có tối thiểu 2 Ranks khác nhau (loại bỏ bàn cờ 1 rank)
+	var pre_r_counts: Array[int] = []
+	for r in range(grid_size):
+		var m := 0
+		for c in range(grid_size):
+			if cells[r][c].is_mine: m += 1
+		pre_r_counts.append(m)
+	for c in range(grid_size):
+		var m := 0
+		for r in range(grid_size):
+			if cells[r][c].is_mine: m += 1
+		pre_r_counts.append(m)
+		
+	var pre_u_counts: Array[int] = []
+	for m in pre_r_counts:
+		if not pre_u_counts.has(m): pre_u_counts.append(m)
+	pre_u_counts.sort()
+	
+	if pre_u_counts.size() < 2:
+		for r in range(grid_size):
+			if r == reserved_r: continue
+			var placed := false
+			for c in range(grid_size):
+				if c == reserved_c: continue
+				if not cells[r][c].is_mine:
+					cells[r][c].is_mine = true
+					placed = true
+					break
+			if placed: break
 
 	# 4. Tính toán số lượng mìn và Tổng Kakuro cho từng hàng & cột
 	var row_mines: Array[int] = []
@@ -208,7 +280,7 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 		safe_cells[i] = safe_cells[swap_idx]
 		safe_cells[swap_idx] = tmp
 		
-	var base_anchors := 3 if grid_size <= 4 else (4 if grid_size == 5 else 5)
+	var base_anchors := 3 if grid_size <= 4 else (4 if grid_size == 5 else (5 if grid_size == 6 else (6 if grid_size == 7 else 7)))
 	for i in range(mini(base_anchors, safe_cells.size())):
 		var p := safe_cells[i]
 		cells[p.x][p.y].is_given = true
@@ -224,7 +296,7 @@ static func _try_generate_candidate(grid_size: int, ante: int, rng: RandomNumber
 	# Nếu bàn cờ chưa giải được bằng logic với số mỏ neo cơ bản:
 	# Mở thêm dần từng ô an toàn ban đầu để đảm bảo 100% suy luận logic được đoạn đầu
 	if not is_board_100_percent_solvable(candidate):
-		for extra_idx in range(base_anchors, mini(base_anchors + 3, safe_cells.size())):
+		for extra_idx in range(base_anchors, mini(base_anchors + 4, safe_cells.size())):
 			var p := safe_cells[extra_idx]
 			cells[p.x][p.y].is_given = true
 			if is_board_100_percent_solvable(candidate):
