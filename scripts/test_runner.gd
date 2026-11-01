@@ -44,6 +44,15 @@ func _ready() -> void:
 	const TestE2EGameplay = preload("res://tests/test_e2e_gameplay.gd")
 	if not TestE2EGameplay.run_tests():
 		all_passed = false
+		
+	# Task 10: 20-Run Auto-Play Simulation Benchmark (Target >= 75% Win Rate across Ante 1-8)
+	const AutoPlayBench = preload("res://tests/auto_play_benchmark.gd")
+	var bench_res = AutoPlayBench.run_benchmark(20)
+	if bench_res.win_rate < 75.0:
+		print("❌ FAIL Auto-Play benchmark win rate below 75%: %.1f%" % bench_res.win_rate)
+		all_passed = false
+	else:
+		print("  ✅ PASS Auto-Play Benchmark achieved %.1f%% Win Rate (>= 75%% required)" % bench_res.win_rate)
 	
 	print("========================================")
 	if all_passed:
