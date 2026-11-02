@@ -8,6 +8,7 @@ signal shop_closed(next_ante: int)
 
 const Relics = preload("res://scripts/core/relic_system.gd")
 const Scrolls = preload("res://scripts/core/scroll_system.gd")
+const FontLilita = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 
 @onready var gold_label: Label = $PanelContainer/VBox/Header/GoldLabel
 @onready var relics_container: HBoxContainer = $PanelContainer/VBox/Content/RelicsSection/RelicsContainer
@@ -78,7 +79,7 @@ func _render_shop() -> void:
 
 func _create_item_card(item_id: String, item_name: String, item_desc: String, cost: int, is_relic: bool) -> PanelContainer:
 	var pc := PanelContainer.new()
-	pc.custom_minimum_size = Vector2(160, 200)
+	pc.custom_minimum_size = Vector2(175, 185)
 	
 	var sb := StyleBoxFlat.new()
 	sb.corner_radius_top_left = 10
@@ -86,12 +87,16 @@ func _create_item_card(item_id: String, item_name: String, item_desc: String, co
 	sb.corner_radius_bottom_left = 10
 	sb.corner_radius_bottom_right = 10
 	sb.bg_color = Color("#1e2235")
-	sb.border_color = Color("#e5b83b") if is_relic else Color("#8892b0")
+	sb.border_color = Color("#e5b83b") if is_relic else Color("#4dd2ff")
 	sb.set_border_width_all(2)
+	sb.content_margin_left = 10
+	sb.content_margin_top = 10
+	sb.content_margin_right = 10
+	sb.content_margin_bottom = 10
 	pc.add_theme_stylebox_override("panel", sb)
 	
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 6)
 	pc.add_child(vbox)
 	
 	var title := Label.new()
@@ -101,19 +106,26 @@ func _create_item_card(item_id: String, item_name: String, item_desc: String, co
 	title.text = "%s%s" % [icon_prefix, item_name]
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.add_theme_font_override("font", FontLilita)
+	title.add_theme_font_size_override("font_size", 13)
 	title.add_theme_color_override("font_color", Color("#ffd24d") if is_relic else Color("#4dd2ff"))
 	vbox.add_child(title)
 	
 	var desc := Label.new()
 	desc.text = item_desc
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	desc.add_theme_font_size_override("font_size", 12)
+	desc.add_theme_font_size_override("font_size", 11)
+	desc.add_theme_color_override("font_color", Color("#cdd6f4"))
 	vbox.add_child(desc)
 	
 	var buy_btn := Button.new()
 	buy_btn.text = "🪙 BUY (%d Gold)" % cost
+	buy_btn.custom_minimum_size = Vector2(0, 32)
+	buy_btn.add_theme_font_override("font", FontLilita)
+	buy_btn.add_theme_font_size_override("font_size", 12)
 	buy_btn.disabled = (game_manager.gold < cost)
 	if is_relic and game_manager.owned_relics.size() >= 5:
 		buy_btn.disabled = true

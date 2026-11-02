@@ -28,4 +28,4 @@ project/assembly_name="Mathemancer"
 
 [rendering]
 
-textures/canvas_textures/default_texture_filter=0
+textures/canvas_textures/default_texture_filter=1
